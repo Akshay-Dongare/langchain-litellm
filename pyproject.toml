@@ -29,6 +29,9 @@ select = ["E", "F", "I", "T201"]
 [tool.coverage.run]
 omit = ["tests/*"]
 
+[tool.codespell]
+skip = "*.lock"
+
 [tool.pytest.ini_options]
 addopts = "--strict-markers --strict-config --durations=5"
 markers = [
