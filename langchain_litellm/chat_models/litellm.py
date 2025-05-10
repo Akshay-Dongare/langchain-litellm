@@ -58,6 +58,7 @@ from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
 from langchain_core.utils import get_from_dict_or_env, pre_init
 from langchain_core.utils.function_calling import convert_to_openai_tool
+from litellm.types.utils import Delta
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -129,27 +130,28 @@ async def acompletion_with_retry(
 
 
 def _convert_delta_to_message_chunk(
-    _dict: Mapping[str, Any], default_class: Type[BaseMessageChunk]
+    delta: Delta, default_class: Type[BaseMessageChunk]
 ) -> BaseMessageChunk:
-    role = _dict.get("role")
-    content = _dict.get("content") or ""
-    if _dict.get("function_call"):
-        additional_kwargs = {"function_call": dict(_dict["function_call"])}
-    elif _dict.get("reasoning_content"):
-        additional_kwargs = {"reasoning_content": _dict["reasoning_content"]}
+    role = delta.role
+    content = delta.content or ""
+    if delta.function_call:
+        additional_kwargs = {"function_call": dict(delta.function_call)}
+    # hasattr check needed since litellm explicitly deletes the field to comply with OpenAI API if absent.
+    elif hasattr(delta, "reasoning_content") and delta.reasoning_content:
+        additional_kwargs = {"reasoning_content": delta.reasoning_content}
     else:
         additional_kwargs = {}
 
     tool_call_chunks = []
-    if raw_tool_calls := _dict.get("tool_calls"):
+    if raw_tool_calls := delta.tool_calls:
         additional_kwargs["tool_calls"] = raw_tool_calls
         try:
             tool_call_chunks = [
                 ToolCallChunk(
-                    name=rtc["function"].get("name"),
-                    args=rtc["function"].get("arguments"),
-                    id=rtc.get("id"),
-                    index=rtc["index"],
+                    name=rtc.function.name,
+                    args=rtc.function.arguments,
+                    id=rtc.id,
+                    index=rtc.index,
                 )
                 for rtc in raw_tool_calls
             ]
@@ -167,7 +169,9 @@ def _convert_delta_to_message_chunk(
     elif role == "system" or default_class == SystemMessageChunk:
         return SystemMessageChunk(content=content)
     elif role == "function" or default_class == FunctionMessageChunk:
-        return FunctionMessageChunk(content=content, name=_dict["name"])
+        return FunctionMessageChunk(
+            content=delta.function_call.arguments, name=delta.function_call.name
+        )
     elif role or default_class == ChatMessageChunk:
         return ChatMessageChunk(content=content, role=role)  # type: ignore[arg-type]
     else:
