@@ -247,6 +247,17 @@ _OPENAI_MODELS = [
     "gpt-4-32k",
     "gpt-4-32k-0314",
     "gpt-4-32k-0613",
+    "gpt-4.1",
+    "gpt-4.1-mini",
+    "gpt-4.1-nano",
+    "o3",
+    "o3-mini",
+    "o3-mini-high",
+    "o4-mini",
+    "o4-mini-high",
+    "o1",
+    "o1-mini",
+    "o1-pro",
 ]
 
 
