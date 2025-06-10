@@ -86,3 +86,15 @@ class TestChatLiteLLMUnit(ChatModelUnitTests):
         assert tool_call_chunk["name"] == mock_tool_call_name
         assert tool_call_chunk["args"] == mock_tool_call_arguments
         assert tool_call_chunk["index"] == mock_tool_call_index
+
+    def test_convert_dict_to_tool_message(self):
+        """Ensure tool role dicts convert to ToolMessage."""
+        from langchain_litellm.chat_models.litellm import _convert_dict_to_message
+
+        mock_dict = {"role": "tool", "content": "result", "tool_call_id": "123"}
+        message = _convert_dict_to_message(mock_dict)
+        from langchain_core.messages import ToolMessage
+
+        assert isinstance(message, ToolMessage)
+        assert message.content == "result"
+        assert message.tool_call_id == "123"

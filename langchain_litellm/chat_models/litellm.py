@@ -109,6 +109,8 @@ def _convert_dict_to_message(_dict: Mapping[str, Any]) -> BaseMessage:
         return SystemMessage(content=_dict["content"])
     elif role == "function":
         return FunctionMessage(content=_dict["content"], name=_dict["name"])
+    elif role == "tool":
+        return ToolMessage(content=_dict["content"], tool_call_id=_dict["tool_call_id"])
     else:
         return ChatMessage(content=_dict["content"], role=role)
 
@@ -136,9 +138,9 @@ def _convert_delta_to_message_chunk(
     content = delta.content or ""
     if delta.function_call:
         additional_kwargs = {"function_call": dict(delta.function_call)}
-    # The hasattr check is necessary because litellm explicitly deletes the 
-    # `reasoning_content` attribute when it is absent to comply with the OpenAI API. 
-    # This ensures that the code gracefully handles cases where the attribute is 
+    # The hasattr check is necessary because litellm explicitly deletes the
+    # `reasoning_content` attribute when it is absent to comply with the OpenAI API.
+    # This ensures that the code gracefully handles cases where the attribute is
     # missing, avoiding potential errors or non-compliance with the API.
     elif hasattr(delta, "reasoning_content") and delta.reasoning_content:
         additional_kwargs = {"reasoning_content": delta.reasoning_content}
