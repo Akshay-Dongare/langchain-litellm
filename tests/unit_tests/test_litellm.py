@@ -98,3 +98,94 @@ class TestChatLiteLLMUnit(ChatModelUnitTests):
         assert isinstance(message, ToolMessage)
         assert message.content == "result"
         assert message.tool_call_id == "123"
+
+    def test_default_params_includes_stream_options_when_streaming(self):
+        """Test that _default_params includes stream_options when streaming is enabled."""
+        from langchain_litellm.chat_models.litellm import ChatLiteLLM
+
+        # Test with streaming=True
+        llm = ChatLiteLLM(model="gpt-3.5-turbo", streaming=True)
+        params = llm._default_params
+        assert "stream_options" in params
+        assert params["stream_options"] == {"include_usage": True}
+
+        # Test with streaming=False
+        llm_no_stream = ChatLiteLLM(model="gpt-3.5-turbo", streaming=False)
+        params_no_stream = llm_no_stream._default_params
+        assert "stream_options" not in params_no_stream
+
+    def test_create_usage_metadata_basic(self):
+        """Test _create_usage_metadata with basic token usage."""
+        from langchain_litellm.chat_models.litellm import _create_usage_metadata
+
+        token_usage = {
+            "prompt_tokens": 10,
+            "completion_tokens": 20,
+            "total_tokens": 30
+        }
+
+        usage_metadata = _create_usage_metadata(token_usage)
+        assert usage_metadata["input_tokens"] == 10
+        assert usage_metadata["output_tokens"] == 20
+        assert usage_metadata["total_tokens"] == 30
+        assert usage_metadata["input_token_details"] == {}
+        assert usage_metadata["output_token_details"] == {}
+
+    def test_create_usage_metadata_with_cache_tokens(self):
+        """Test _create_usage_metadata with cache tokens."""
+        from langchain_litellm.chat_models.litellm import _create_usage_metadata
+
+        token_usage = {
+            "prompt_tokens": 10,
+            "completion_tokens": 20,
+            "total_tokens": 30,
+            "cache_read_input_tokens": 5
+        }
+
+        usage_metadata = _create_usage_metadata(token_usage)
+        assert usage_metadata["input_tokens"] == 10
+        assert usage_metadata["output_tokens"] == 20
+        assert usage_metadata["total_tokens"] == 30
+        assert usage_metadata["input_token_details"] == {"cache_read": 5}
+        assert usage_metadata["output_token_details"] == {}
+
+    def test_create_usage_metadata_with_reasoning_tokens(self):
+        """Test _create_usage_metadata with reasoning tokens."""
+        from langchain_litellm.chat_models.litellm import _create_usage_metadata
+
+        token_usage = {
+            "prompt_tokens": 10,
+            "completion_tokens": 20,
+            "total_tokens": 30,
+            "completion_tokens_details": {
+                "reasoning_tokens": 15
+            }
+        }
+
+        usage_metadata = _create_usage_metadata(token_usage)
+        assert usage_metadata["input_tokens"] == 10
+        assert usage_metadata["output_tokens"] == 20
+        assert usage_metadata["total_tokens"] == 30
+        assert usage_metadata["input_token_details"] == {}
+        assert usage_metadata["output_token_details"] == {"reasoning": 15}
+
+    def test_create_usage_metadata_with_all_advanced_fields(self):
+        """Test _create_usage_metadata with all advanced fields."""
+        from langchain_litellm.chat_models.litellm import _create_usage_metadata
+
+        token_usage = {
+            "prompt_tokens": 10,
+            "completion_tokens": 20,
+            "total_tokens": 30,
+            "cache_read_input_tokens": 5,
+            "completion_tokens_details": {
+                "reasoning_tokens": 15
+            }
+        }
+
+        usage_metadata = _create_usage_metadata(token_usage)
+        assert usage_metadata["input_tokens"] == 10
+        assert usage_metadata["output_tokens"] == 20
+        assert usage_metadata["total_tokens"] == 30
+        assert usage_metadata["input_token_details"] == {"cache_read": 5}
+        assert usage_metadata["output_token_details"] == {"reasoning": 15}
