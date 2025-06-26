@@ -105,6 +105,10 @@ def _convert_dict_to_message(_dict: Mapping[str, Any]) -> BaseMessage:
         if _dict.get("tool_calls"):
             additional_kwargs["tool_calls"] = _dict["tool_calls"]
 
+        # Add reasoning_content support for thinking-enabled models
+        if _dict.get("reasoning_content"):
+            additional_kwargs["reasoning_content"] = _dict["reasoning_content"]
+
         return AIMessage(content=content, additional_kwargs=additional_kwargs)
     elif role == "system":
         return SystemMessage(content=_dict["content"])
@@ -148,7 +152,7 @@ def _convert_delta_to_message_chunk(
         function_call = delta.function_call
         raw_tool_calls = delta.tool_calls
         reasoning_content = getattr(delta, "reasoning_content", None)
-    
+
     if function_call:
         additional_kwargs = {"function_call": dict(function_call)}
     # The hasattr check is necessary because litellm explicitly deletes the
@@ -173,7 +177,7 @@ def _convert_delta_to_message_chunk(
                 )
                 for rtc in raw_tool_calls
             ]
-        except KeyError:
+        except (KeyError, AttributeError):
             pass
 
     if role == "user" or default_class == HumanMessageChunk:
@@ -288,7 +292,7 @@ class ChatLiteLLM(BaseChatModel):
         set_model_value = self.model
         if self.model_name is not None:
             set_model_value = self.model_name
-        return {
+        params = {
             "model": set_model_value,
             "force_timeout": self.request_timeout,
             "max_tokens": self.max_tokens,
@@ -298,6 +302,13 @@ class ChatLiteLLM(BaseChatModel):
             "custom_llm_provider": self.custom_llm_provider,
             **self.model_kwargs,
         }
+
+        # Add stream_options for usage tracking in streaming responses
+        # This enables token usage metadata in streaming chunks
+        if self.streaming:
+            params["stream_options"] = {"include_usage": True}
+
+        return params
 
     @property
     def _client_params(self) -> Dict[str, Any]:
@@ -453,6 +464,10 @@ class ChatLiteLLM(BaseChatModel):
         message_dicts, params = self._create_message_dicts(messages, stop)
         params = {**params, **kwargs, "stream": True}
 
+        # Ensure stream_options is set for usage tracking
+        if "stream_options" not in params:
+            params["stream_options"] = {"include_usage": True}
+
         default_chunk_class = AIMessageChunk
         for chunk in self.completion_with_retry(
             messages=message_dicts, run_manager=run_manager, **params
@@ -461,12 +476,23 @@ class ChatLiteLLM(BaseChatModel):
                 chunk = chunk.model_dump()
             if len(chunk["choices"]) == 0:
                 continue
+
+            # Extract usage metadata from chunk if present
+            usage_metadata = None
+            if "usage" in chunk and chunk["usage"]:
+                usage_metadata = _create_usage_metadata(chunk["usage"])
+
             delta = chunk["choices"][0]["delta"]
-            chunk = _convert_delta_to_message_chunk(delta, default_chunk_class)
-            default_chunk_class = chunk.__class__
-            cg_chunk = ChatGenerationChunk(message=chunk)
+            message_chunk = _convert_delta_to_message_chunk(delta, default_chunk_class)
+            default_chunk_class = message_chunk.__class__
+
+            # Attach usage metadata to the message chunk
+            if usage_metadata:
+                message_chunk.usage_metadata = usage_metadata
+
+            cg_chunk = ChatGenerationChunk(message=message_chunk)
             if run_manager:
-                run_manager.on_llm_new_token(chunk.content, chunk=cg_chunk)
+                run_manager.on_llm_new_token(message_chunk.content, chunk=cg_chunk)
             yield cg_chunk
 
     async def _astream(
@@ -479,20 +505,37 @@ class ChatLiteLLM(BaseChatModel):
         message_dicts, params = self._create_message_dicts(messages, stop)
         params = {**params, **kwargs, "stream": True}
 
+        # Ensure stream_options is set for usage tracking
+        if "stream_options" not in params:
+            params["stream_options"] = {"include_usage": True}
+
         default_chunk_class = AIMessageChunk
-        async for chunk in await acompletion_with_retry(
-            self, messages=message_dicts, run_manager=run_manager, **params
+
+        # For async streaming, we need to use the async completion method properly
+        async for chunk in self.acompletion_with_retry(
+            messages=message_dicts, run_manager=run_manager, **params
         ):
             if not isinstance(chunk, dict):
                 chunk = chunk.model_dump()
             if len(chunk["choices"]) == 0:
                 continue
+
+            # Extract usage metadata from chunk if present
+            usage_metadata = None
+            if "usage" in chunk and chunk["usage"]:
+                usage_metadata = _create_usage_metadata(chunk["usage"])
+
             delta = chunk["choices"][0]["delta"]
-            chunk = _convert_delta_to_message_chunk(delta, default_chunk_class)
-            default_chunk_class = chunk.__class__
-            cg_chunk = ChatGenerationChunk(message=chunk)
+            message_chunk = _convert_delta_to_message_chunk(delta, default_chunk_class)
+            default_chunk_class = message_chunk.__class__
+
+            # Attach usage metadata to the message chunk
+            if usage_metadata:
+                message_chunk.usage_metadata = usage_metadata
+
+            cg_chunk = ChatGenerationChunk(message=message_chunk)
             if run_manager:
-                await run_manager.on_llm_new_token(chunk.content, chunk=cg_chunk)
+                await run_manager.on_llm_new_token(message_chunk.content, chunk=cg_chunk)
             yield cg_chunk
 
     async def _agenerate(
@@ -598,8 +641,34 @@ class ChatLiteLLM(BaseChatModel):
 def _create_usage_metadata(token_usage: Mapping[str, Any]) -> UsageMetadata:
     input_tokens = token_usage.get("prompt_tokens", 0)
     output_tokens = token_usage.get("completion_tokens", 0)
+
+    # Extract advanced usage details
+    input_token_details = {}
+    output_token_details = {}
+
+    # Cache tokens (for providers that support it like OpenAI, Anthropic)
+    if "cache_read_input_tokens" in token_usage:
+        input_token_details["cache_read"] = token_usage["cache_read_input_tokens"]
+
+    if "cache_creation_input_tokens" in token_usage:
+        input_token_details["cache_creation"] = token_usage["cache_creation_input_tokens"]
+
+    # Audio tokens (for multimodal models)
+    if "audio_input_tokens" in token_usage:
+        input_token_details["audio"] = token_usage["audio_input_tokens"]
+
+    if "audio_output_tokens" in token_usage:
+        output_token_details["audio"] = token_usage["audio_output_tokens"]
+
+    # Reasoning tokens (for o1 models, Claude thinking, etc.)
+    completion_tokens_details = token_usage.get("completion_tokens_details", {})
+    if completion_tokens_details and "reasoning_tokens" in completion_tokens_details:
+        output_token_details["reasoning"] = completion_tokens_details["reasoning_tokens"]
+
     return UsageMetadata(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         total_tokens=input_tokens + output_tokens,
+        input_token_details=input_token_details if input_token_details else {},
+        output_token_details=output_token_details if output_token_details else {},
     )
