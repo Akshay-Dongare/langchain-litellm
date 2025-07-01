@@ -59,6 +59,7 @@ from langchain_core.tools import BaseTool
 from langchain_core.utils import get_from_dict_or_env, pre_init
 from langchain_core.utils.function_calling import convert_to_openai_tool
 from litellm.types.utils import Delta
+import litellm
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -120,15 +121,14 @@ async def acompletion_with_retry(
     run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
     **kwargs: Any,
 ) -> Any:
-    """Use tenacity to retry the async completion call."""
-    retry_decorator = _create_retry_decorator(llm, run_manager=run_manager)
-
-    @retry_decorator
-    async def _completion_with_retry(**kwargs: Any) -> Any:
-        # Use OpenAI's async api https://github.com/openai/openai-python#async-api
-        return await llm.client.acreate(**kwargs)
-
-    return await _completion_with_retry(**kwargs)
+    """Simple retry wrapper for litellm.acompletion"""
+    for try_num in range(llm.max_retries):
+        try:
+            return await litellm.acompletion(**kwargs)
+        except Exception as e:
+            logger.error(f"Error in completion with retry: {e}")
+            if try_num == llm.max_retries - 1:
+                raise e
 
 
 def _convert_delta_to_message_chunk(
