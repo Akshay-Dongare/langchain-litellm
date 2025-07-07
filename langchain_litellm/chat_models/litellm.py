@@ -680,6 +680,16 @@ def _create_usage_metadata(token_usage: Mapping[str, Any]) -> UsageMetadata:
     if "cache_read_input_tokens" in token_usage:
         input_token_details["cache_read"] = token_usage["cache_read_input_tokens"]
 
+    if "cache_creation_input_tokens" in token_usage:
+        input_token_details["cache_creation"] = token_usage["cache_creation_input_tokens"]
+
+    # Audio tokens (for multimodal models)
+    if "audio_input_tokens" in token_usage:
+        input_token_details["audio"] = token_usage["audio_input_tokens"]
+
+    if "audio_output_tokens" in token_usage:
+        output_token_details["audio"] = token_usage["audio_output_tokens"]
+
     # Reasoning tokens (for o1 models, Claude thinking, etc.)
     completion_tokens_details = token_usage.get("completion_tokens_details", {})
     if completion_tokens_details and "reasoning_tokens" in completion_tokens_details:
