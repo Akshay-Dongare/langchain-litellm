@@ -189,3 +189,71 @@ class TestChatLiteLLMUnit(ChatModelUnitTests):
         assert usage_metadata["total_tokens"] == 30
         assert usage_metadata["input_token_details"] == {"cache_read": 5}
         assert usage_metadata["output_token_details"] == {"reasoning": 15}
+
+    def test_create_usage_metadata_with_cache_creation_tokens(self):
+        """Test _create_usage_metadata with cache creation tokens."""
+        from langchain_litellm.chat_models.litellm import _create_usage_metadata
+
+        token_usage = {
+            "prompt_tokens": 10,
+            "completion_tokens": 20,
+            "total_tokens": 30,
+            "cache_creation_input_tokens": 8
+        }
+
+        usage_metadata = _create_usage_metadata(token_usage)
+        assert usage_metadata["input_tokens"] == 10
+        assert usage_metadata["output_tokens"] == 20
+        assert usage_metadata["total_tokens"] == 30
+        assert usage_metadata["input_token_details"] == {"cache_creation": 8}
+        assert usage_metadata["output_token_details"] == {}
+
+    def test_create_usage_metadata_with_audio_tokens(self):
+        """Test _create_usage_metadata with audio tokens for multimodal models."""
+        from langchain_litellm.chat_models.litellm import _create_usage_metadata
+
+        token_usage = {
+            "prompt_tokens": 10,
+            "completion_tokens": 20,
+            "total_tokens": 30,
+            "audio_input_tokens": 5,
+            "audio_output_tokens": 3
+        }
+
+        usage_metadata = _create_usage_metadata(token_usage)
+        assert usage_metadata["input_tokens"] == 10
+        assert usage_metadata["output_tokens"] == 20
+        assert usage_metadata["total_tokens"] == 30
+        assert usage_metadata["input_token_details"] == {"audio": 5}
+        assert usage_metadata["output_token_details"] == {"audio": 3}
+
+    def test_create_usage_metadata_complete_schema(self):
+        """Test _create_usage_metadata with complete schema matching OpenAI format."""
+        from langchain_litellm.chat_models.litellm import _create_usage_metadata
+
+        token_usage = {
+            "prompt_tokens": 350,
+            "completion_tokens": 240,
+            "total_tokens": 590,
+            "cache_read_input_tokens": 100,
+            "cache_creation_input_tokens": 200,
+            "audio_input_tokens": 10,
+            "audio_output_tokens": 10,
+            "completion_tokens_details": {
+                "reasoning_tokens": 200
+            }
+        }
+
+        usage_metadata = _create_usage_metadata(token_usage)
+        assert usage_metadata["input_tokens"] == 350
+        assert usage_metadata["output_tokens"] == 240
+        assert usage_metadata["total_tokens"] == 590
+        assert usage_metadata["input_token_details"] == {
+            "cache_read": 100,
+            "cache_creation": 200,
+            "audio": 10
+        }
+        assert usage_metadata["output_token_details"] == {
+            "audio": 10,
+            "reasoning": 200
+        }
