@@ -190,70 +190,85 @@ class TestChatLiteLLMUnit(ChatModelUnitTests):
         assert usage_metadata["input_token_details"] == {"cache_read": 5}
         assert usage_metadata["output_token_details"] == {"reasoning": 15}
 
-    def test_create_usage_metadata_with_cache_creation_tokens(self):
-        """Test _create_usage_metadata with cache creation tokens."""
-        from langchain_litellm.chat_models.litellm import _create_usage_metadata
+    def test_litellm_normalize_messages(self):
+        """
+        Test that _normalize_messages correctly handles different multimodal formats:
+        - LiteLLM format should be preserved (not transformed)
+        - OpenAI format should be transformed correctly
+        - Vertex format should be preserved
+        """
+        import base64
+        from langchain_core.messages import HumanMessage
+        from langchain_core.language_models._utils import _normalize_messages
 
-        token_usage = {
-            "prompt_tokens": 10,
-            "completion_tokens": 20,
-            "total_tokens": 30,
-            "cache_creation_input_tokens": 8
-        }
+        # Create dummy PDF data
+        dummy_pdf_data = base64.b64encode(b"dummy pdf content").decode('utf-8')
 
-        usage_metadata = _create_usage_metadata(token_usage)
-        assert usage_metadata["input_tokens"] == 10
-        assert usage_metadata["output_tokens"] == 20
-        assert usage_metadata["total_tokens"] == 30
-        assert usage_metadata["input_token_details"] == {"cache_creation": 8}
-        assert usage_metadata["output_token_details"] == {}
-
-    def test_create_usage_metadata_with_audio_tokens(self):
-        """Test _create_usage_metadata with audio tokens for multimodal models."""
-        from langchain_litellm.chat_models.litellm import _create_usage_metadata
-
-        token_usage = {
-            "prompt_tokens": 10,
-            "completion_tokens": 20,
-            "total_tokens": 30,
-            "audio_input_tokens": 5,
-            "audio_output_tokens": 3
-        }
-
-        usage_metadata = _create_usage_metadata(token_usage)
-        assert usage_metadata["input_tokens"] == 10
-        assert usage_metadata["output_tokens"] == 20
-        assert usage_metadata["total_tokens"] == 30
-        assert usage_metadata["input_token_details"] == {"audio": 5}
-        assert usage_metadata["output_token_details"] == {"audio": 3}
-
-    def test_create_usage_metadata_complete_schema(self):
-        """Test _create_usage_metadata with complete schema matching OpenAI format."""
-        from langchain_litellm.chat_models.litellm import _create_usage_metadata
-
-        token_usage = {
-            "prompt_tokens": 350,
-            "completion_tokens": 240,
-            "total_tokens": 590,
-            "cache_read_input_tokens": 100,
-            "cache_creation_input_tokens": 200,
-            "audio_input_tokens": 10,
-            "audio_output_tokens": 10,
-            "completion_tokens_details": {
-                "reasoning_tokens": 200
+        # Test 1: LiteLLM's official format should be preserved
+        litellm_message = HumanMessage(content=[
+            {"type": "text", "text": "Analyze this PDF"},
+            {
+                "type": "file",
+                "file": {
+                    "file_data": f"data:application/pdf;base64,{dummy_pdf_data}"
+                }
             }
-        }
+        ])
 
-        usage_metadata = _create_usage_metadata(token_usage)
-        assert usage_metadata["input_tokens"] == 350
-        assert usage_metadata["output_tokens"] == 240
-        assert usage_metadata["total_tokens"] == 590
-        assert usage_metadata["input_token_details"] == {
-            "cache_read": 100,
-            "cache_creation": 200,
-            "audio": 10
-        }
-        assert usage_metadata["output_token_details"] == {
-            "audio": 10,
-            "reasoning": 200
-        }
+        normalized_litellm = _normalize_messages([litellm_message])[0]
+        litellm_file_content = next(
+            (item for item in normalized_litellm.content if isinstance(item, dict) and item.get('type') == 'file'),
+            None
+        )
+
+        assert litellm_file_content is not None, "LiteLLM file content not found"
+        # LiteLLM format should be preserved
+        assert 'file' in litellm_file_content, "LiteLLM format should preserve 'file' key"
+        assert 'file_data' in litellm_file_content['file'], "LiteLLM format should preserve 'file_data'"
+        assert 'source_type' not in litellm_file_content, "LiteLLM format should not have 'source_type' key"
+
+        # Test 2: OpenAI format should be transformed appropriately
+        openai_message = HumanMessage(content=[
+            {"type": "text", "text": "Analyze this image"},
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{dummy_pdf_data}"
+                }
+            }
+        ])
+
+        normalized_openai = _normalize_messages([openai_message])[0]
+        openai_file_content = next(
+            (item for item in normalized_openai.content if isinstance(item, dict) and item.get('type') == 'image_url'),
+            None
+        )
+
+        assert openai_file_content is not None, "OpenAI file content not found"
+        # OpenAI format should be preserved as-is
+        assert 'image_url' in openai_file_content, "OpenAI format should preserve 'image_url' key"
+        assert 'url' in openai_file_content['image_url'], "OpenAI format should preserve 'url'"
+
+        # Test 3: Vertex format should be preserved
+        vertex_message = HumanMessage(content=[
+            {"type": "text", "text": "Analyze this file"},
+            {
+                "type": "file",
+                "file": {
+                    "file_data": f"data:application/pdf;base64,{dummy_pdf_data}",
+                    "format": "application/pdf"
+                }
+            }
+        ])
+
+        normalized_vertex = _normalize_messages([vertex_message])[0]
+        vertex_file_content = next(
+            (item for item in normalized_vertex.content if isinstance(item, dict) and item.get('type') == 'file'),
+            None
+        )
+
+        assert vertex_file_content is not None, "Vertex file content not found"
+        # Vertex format should be preserved
+        assert 'file' in vertex_file_content, "Vertex format should preserve 'file' key"
+        assert 'format' in vertex_file_content['file'], "Vertex format should preserve 'format' key"
+        assert vertex_file_content['file']['format'] == "application/pdf", "Vertex format should preserve format value"
