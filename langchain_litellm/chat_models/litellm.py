@@ -116,22 +116,6 @@ def _convert_dict_to_message(_dict: Mapping[str, Any]) -> BaseMessage:
         return ChatMessage(content=_dict["content"], role=role)
 
 
-async def acompletion_with_retry(
-    llm: ChatLiteLLM,
-    run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
-    **kwargs: Any,
-) -> Any:
-    """Use tenacity to retry the async completion call."""
-    retry_decorator = _create_retry_decorator(llm, run_manager=run_manager)
-
-    @retry_decorator
-    async def _completion_with_retry(**kwargs: Any) -> Any:
-        # Use OpenAI's async api https://github.com/openai/openai-python#async-api
-        return await llm.client.acreate(**kwargs)
-
-    return await _completion_with_retry(**kwargs)
-
-
 def _convert_delta_to_message_chunk(
     delta: Union[Delta, Dict[str, Any]], default_class: Type[BaseMessageChunk]
 ) -> BaseMessageChunk:
@@ -341,6 +325,21 @@ class ChatLiteLLM(BaseChatModel):
 
         return _completion_with_retry(**kwargs)
 
+
+    async def acompletion_with_retry(
+        self,
+        run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
+        **kwargs: Any
+    ) -> Any:
+        """Use tenacity to retry the async completion call."""
+        retry_decorator = _create_retry_decorator(self, run_manager=run_manager)
+
+        @retry_decorator
+        async def _completion_with_retry(**kwargs: Any) -> Any:
+            return await self.client.acompletion(**kwargs)
+
+        return await _completion_with_retry(**kwargs)
+
     @pre_init
     def validate_environment(cls, values: Dict) -> Dict:
         """Validate api key, python package exists, temperature, top_p, and top_k."""
@@ -480,8 +479,8 @@ class ChatLiteLLM(BaseChatModel):
         params = {**params, **kwargs, "stream": True}
 
         default_chunk_class = AIMessageChunk
-        async for chunk in await acompletion_with_retry(
-            self, messages=message_dicts, run_manager=run_manager, **params
+        async for chunk in await self.acompletion_with_retry(
+            messages=message_dicts, run_manager=run_manager, **params
         ):
             if not isinstance(chunk, dict):
                 chunk = chunk.model_dump()
@@ -512,8 +511,8 @@ class ChatLiteLLM(BaseChatModel):
 
         message_dicts, params = self._create_message_dicts(messages, stop)
         params = {**params, **kwargs}
-        response = await acompletion_with_retry(
-            self, messages=message_dicts, run_manager=run_manager, **params
+        response = await self.acompletion_with_retry(
+            messages=message_dicts, run_manager=run_manager, **params
         )
         return self._create_chat_result(response)
 
