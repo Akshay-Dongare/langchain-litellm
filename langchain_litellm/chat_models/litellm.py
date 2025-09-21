@@ -263,6 +263,7 @@ class ChatLiteLLM(BaseChatModel):
     api_base: Optional[str] = None
     organization: Optional[str] = None
     custom_llm_provider: Optional[str] = None
+    extra_headers: Optional[Dict[str, str]] = None
     request_timeout: Optional[Union[float, Tuple[float, float]]] = None
     temperature: Optional[float] = None
     """Run inference with this temperature. Must be in the closed
@@ -327,6 +328,11 @@ class ChatLiteLLM(BaseChatModel):
             "force_timeout": self.request_timeout,
             "api_base": self.api_base,
         }
+        # Forward any extra headers to the client and include in params
+        if self.extra_headers is not None:
+            # set attribute on client for runtime usage
+            setattr(self.client, "extra_headers", self.extra_headers)
+            creds["extra_headers"] = self.extra_headers
         return {**self._default_params, **creds}
 
     def completion_with_retry(
