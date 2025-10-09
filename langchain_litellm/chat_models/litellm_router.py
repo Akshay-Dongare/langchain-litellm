@@ -95,6 +95,7 @@ class ChatLiteLLMRouter(ChatLiteLLM):
 
         message_dicts, params = self._create_message_dicts(messages, stop)
         params = {**params, **kwargs}
+        params = {k:v for k, v in params.items() if v is not None}
         self._prepare_params_for_router(params)
 
         response = self.router.completion(
@@ -113,6 +114,7 @@ class ChatLiteLLMRouter(ChatLiteLLM):
         default_chunk_class = AIMessageChunk
         message_dicts, params = self._create_message_dicts(messages, stop)
         params = {**params, **kwargs, "stream": True}
+        params = {k:v for k, v in params.items() if v is not None}
         params["stream_options"] = self.stream_options
         self._prepare_params_for_router(params)
 
@@ -142,6 +144,7 @@ class ChatLiteLLMRouter(ChatLiteLLM):
         default_chunk_class = AIMessageChunk
         message_dicts, params = self._create_message_dicts(messages, stop)
         params = {**params, **kwargs, "stream": True}
+        params = {k:v for k, v in params.items() if v is not None}
         params["stream_options"] = self.stream_options
         self._prepare_params_for_router(params)
 
@@ -182,6 +185,7 @@ class ChatLiteLLMRouter(ChatLiteLLM):
 
         message_dicts, params = self._create_message_dicts(messages, stop)
         params = {**params, **kwargs}
+        params = {k:v for k, v in params.items() if v is not None}
         self._prepare_params_for_router(params)
 
         response = await self.router.acompletion(
