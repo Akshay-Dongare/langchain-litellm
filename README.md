@@ -14,7 +14,7 @@
 <img src="https://img.shields.io/pypi/v/langchain-litellm?label=PyPI%20package&style=flat" alt="PyPI Package Version">
 </a><br/>
 <a href="https://pepy.tech/projects/langchain-litellm">
-<img src="https://static.pepy.tech/badge/langchain-litellm" alt="PyPI Downloads">
+<img src="https://static.pepy.tech/personalized-badge/langchain-litellm?period=total&units=INTERNATIONAL_SYSTEM&left_color=GREY&right_color=BLUE&left_text=downloads" alt="PyPI Downloads">
 </a><br/>
 <a href="https://github.com/Akshay-Dongare/langchain-litellm/actions/workflows/pypi-release.yml">
 <img src="https://github.com/Akshay-Dongare/langchain-litellm/actions/workflows/pypi-release.yml/badge.svg?branch=main&event=release" alt="PyPI Release CI">
@@ -64,3 +64,4 @@ from langchain_litellm import ChatLiteLLM
 from langchain_litellm import ChatLiteLLMRouter
 ```
 See a [usage example](https://github.com/Akshay-Dongare/langchain-litellm/blob/main/docs/litellm.ipynb)
+
