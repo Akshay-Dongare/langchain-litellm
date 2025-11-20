@@ -19,8 +19,8 @@ disallow_untyped_defs = "True"
 "Release Notes" = "https://github.com/langchain-ai/langchain/blob/master/docs/docs/integrations/providers/litellm.mdx"
 
 [tool.poetry.dependencies]
-python = ">=3.9,<4.0"
-langchain-core = "^0.3.15"
+python = ">=3.10,<4.0"
+langchain-core = ">0.3.15,<2.0.0"
 litellm = "^1.65.1"
 
 [tool.ruff.lint]
@@ -76,8 +76,8 @@ requests-mock = ">=1.11.0,<2.0.0"
 pytest-xdist = ">=3.6.1,<4.0.0"
 blockbuster = ">=1.5.18,<1.6"
 cffi = {markers = "python_version >= \"3.10\"", version = "^1.17.1"}
-langchain-core = "^0.3.49"
-langchain = "^0.3.22"
+    langchain-core = "^1.0.0"
+    langchain = "^1.0.0"
 toml = ">=0.10.2"
 
 [tool.poetry.group.codespell.dependencies]
@@ -97,9 +97,9 @@ types-pytz = ">=2023.3.0.0,<2024.0.0.0"
 types-chardet = ">=5.0.4.6,<6.0.0.0"
 types-redis = ">=4.3.21.6,<5.0.0.0"
 mypy-protobuf = ">=3.0.0,<4.0.0"
-langchain-core = "^0.3.49"
+langchain-core = "^1.0.0"
 langchain-text-splitters = "^0.3.7"
-langchain = "^0.3.22"
+langchain = "^1.0.0"
 
 [tool.poetry-dynamic-versioning]
 enable = true
