@@ -429,7 +429,7 @@ class ChatLiteLLM(BaseChatModel):
                 message.usage_metadata = _create_usage_metadata(token_usage)
             gen = ChatGeneration(
                 message=message,
-                generation_info=dict(finish_reason=res.get("finish_reason")),
+                generation_info=dict(finish_reason=res.get("finish_reason"), logprobs=res.get("logprobs")),
             )
             generations.append(gen)
         set_model_value = self.model
