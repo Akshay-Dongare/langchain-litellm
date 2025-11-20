@@ -17,8 +17,12 @@ from typing import (
     Sequence,
     Tuple,
     Type,
+    TypedDict,
     Union,
+    cast,
 )
+from typing_extensions import is_typeddict
+from operator import itemgetter
 
 from langchain_core.callbacks import (
     AsyncCallbackManagerForLLMRun,
@@ -54,8 +58,15 @@ from langchain_core.outputs import (
     ChatGenerationChunk,
     ChatResult,
 )
-from langchain_core.runnables import Runnable
+from langchain_core.output_parsers import (
+    JsonOutputParser,
+    PydanticOutputParser,
+    PydanticToolsParser,
+    JsonOutputKeyToolsParser
+)
+from langchain_core.runnables import Runnable, RunnablePassthrough
 from langchain_core.tools import BaseTool
+from langchain_core.utils.pydantic import TypeBaseModel, is_basemodel_subclass
 from langchain_core.utils import get_from_dict_or_env, pre_init
 from langchain_core.utils.function_calling import convert_to_openai_tool
 from litellm.types.utils import Delta
@@ -592,6 +603,86 @@ class ChatLiteLLM(BaseChatModel):
                     f"provided tools were {tool_names}."
                 )
         return super().bind(tools=formatted_tools, tool_choice=tool_choice, **kwargs)
+    
+    def with_structured_output(
+        self,
+        schema: Union[Dict[str, Any], type, BaseModel],
+        *,
+        method: Optional[Literal["json_schema", "function_calling"]] = "json_schema",
+        include_raw: bool = False,
+        strict: Optional[bool] = None,
+        **kwargs: Any,
+    ) -> Runnable[LanguageModelInput, Union[Dict, BaseModel]]:
+        # Remove unsupported parameters
+        _ = kwargs.pop("tools", None)
+        if kwargs:
+            msg = f"Received unsupported arguments {kwargs}"
+            raise ValueError(msg)         
+
+        if method == "function_calling":
+            # pydantic
+            if isinstance(schema, type) and is_basemodel_subclass(schema):
+                parser = PydanticToolsParser(
+                    tools=[cast(TypeBaseModel, schema)], 
+                    first_tool_only=True
+                )
+                llm = self.bind_tools([schema], tool_choice="required")
+            # dict or typeddict
+            elif is_typeddict(schema) or isinstance(schema, dict):
+                tool_def = convert_to_openai_tool(schema)
+                function_name = tool_def['function']['name']
+                parser = JsonOutputKeyToolsParser(
+                    key_name=function_name,
+                    first_tool_only=True
+                )
+                llm = self.bind_tools([tool_def], tool_choice="required")
+            else:                
+                msg = f"Unsupported schema type {type(schema)}"
+                raise ValueError(msg)
+
+        elif method == "json_schema":
+
+            if strict is None:
+                strict_flag = True
+            else:
+                strict_flag = strict
+
+            # Setup parser for JSON text
+            if isinstance(schema, type) and is_basemodel_subclass(schema):
+                parser = PydanticOutputParser(pydantic_object=schema)
+            else:
+                parser = JsonOutputParser()
+            
+            # Setup LLM with json_schema
+            tool_def = convert_to_openai_tool(schema)
+            raw_schema = tool_def["function"]["parameters"]
+            json_schema = _ensure_additional_properties_false(raw_schema)
+            
+            # Safe schema name extraction
+            schema_name = getattr(schema, '__name__', tool_def["function"]["name"])
+
+            llm = self.bind(
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": schema_name,
+                        "schema": json_schema,
+                        "strict": strict_flag
+                    }
+                }
+            )
+    
+        if include_raw:
+            parser_with_fallback = RunnablePassthrough.assign(
+                parsed=itemgetter("raw") | parser,
+                parsing_error=lambda _: None
+            ).with_fallbacks(
+                [RunnablePassthrough.assign(parsed=lambda _: None)],
+                exception_key="parsing_error",
+            )
+            return {"raw": llm} | parser_with_fallback
+        
+        return llm | parser
 
     @property
     def _identifying_params(self) -> Dict[str, Any]:
@@ -620,3 +711,24 @@ def _create_usage_metadata(token_usage: Mapping[str, Any]) -> UsageMetadata:
         output_tokens=output_tokens,
         total_tokens=input_tokens + output_tokens,
     )
+
+def _ensure_additional_properties_false(schema_dict: dict) -> dict:
+    """Recursively ensure additionalProperties is set to false for all objects."""
+    if isinstance(schema_dict, dict):
+        result = schema_dict.copy()
+        
+        if result.get("type") == "object":
+            result["additionalProperties"] = False
+        
+        for key, value in result.items():
+            if isinstance(value, dict):
+                result[key] = _ensure_additional_properties_false(value)
+            elif isinstance(value, list):
+                result[key] = [
+                    _ensure_additional_properties_false(item) 
+                    if isinstance(item, dict) else item 
+                    for item in value
+                ]
+        
+        return result
+    return schema_dict
