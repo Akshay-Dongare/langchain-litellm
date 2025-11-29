@@ -17,21 +17,22 @@
 <img src="https://static.pepy.tech/personalized-badge/langchain-litellm?period=total&units=INTERNATIONAL_SYSTEM&left_color=GREY&right_color=BLUE&left_text=downloads" alt="PyPI Downloads">
 </a><br/>
 <a href="https://github.com/Akshay-Dongare/langchain-litellm/actions/workflows/pypi-release.yml">
-<img src="https://github.com/Akshay-Dongare/langchain-litellm/actions/workflows/pypi-release.yml/badge.svg?branch=main&event=release" alt="PyPI Release CI">
+</a>
+<a href="https://opensource.org/licenses/MIT">
+<img src="https://img.shields.io/badge/License-MIT-brightgreen.svg" alt="License: MIT">
 </a>
 </td>
 
 <td align="center">
+<img src="https://img.shields.io/badge/Platform-Linux%2C%20Windows%2C%20macOS-blue" alt="Platform">
+<br>
 <a href="https://www.python.org">
 <img src="https://img.shields.io/badge/Python-3670A0?style=flat&logo=python&logoColor=ffdd54" alt="Python">
 </a><br/>
+
 <a href="https://python-poetry.org/">
 <img src="https://img.shields.io/endpoint?url=https://python-poetry.org/badge/v0.json" alt="Poetry">
-</a><br/>
-<a href="https://opensource.org/licenses/MIT">
-<img src="https://img.shields.io/badge/License-MIT-brightgreen.svg" alt="License: MIT">
-</a><br/>
-<img src="https://img.shields.io/badge/Platform-Linux%2C%20Windows%2C%20macOS-blue" alt="Platform">
+</a>
 </td>
 
 <td align="center">
@@ -64,4 +65,5 @@ from langchain_litellm import ChatLiteLLM
 from langchain_litellm import ChatLiteLLMRouter
 ```
 See a [usage example](https://github.com/Akshay-Dongare/langchain-litellm/blob/main/docs/litellm.ipynb)
+
 
