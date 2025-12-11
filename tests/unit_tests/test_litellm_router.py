@@ -5,10 +5,10 @@ from typing import Type
 from langchain_tests.unit_tests import ChatModelUnitTests
 
 from langchain_litellm.chat_models import ChatLiteLLMRouter
-from tests.utils import test_router
+from tests.utils import test_router  
 
 
-class TestChatLiteLLMUnit(ChatModelUnitTests):
+class TestChatLiteLLMRouterUnit(ChatModelUnitTests):  # Changed class name to avoid conflict
     @property
     def chat_model_class(self) -> Type[ChatLiteLLMRouter]:
         return ChatLiteLLMRouter
@@ -51,3 +51,27 @@ class TestChatLiteLLMUnit(ChatModelUnitTests):
     @property
     def supports_image_tool_message(self) -> bool:
         return False
+
+    def test_router_provider_specific_fields_in_chat_result(self):
+        """Test that Router preserves top-level provider_specific_fields."""
+        router = test_router()
+        llm = ChatLiteLLMRouter(router=router)
+        
+        mock_response = {
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": "Test response"
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+            "provider_specific_fields": {
+                "citations": [{"source": "vertex"}]
+            }
+        }
+        
+        result = llm._create_chat_result(mock_response, metadata={})
+        
+        assert "provider_specific_fields" in result.llm_output
+        assert result.llm_output["provider_specific_fields"]["citations"][0]["source"] == "vertex"
