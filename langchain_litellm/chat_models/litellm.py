@@ -118,6 +118,10 @@ def _convert_dict_to_message(_dict: Mapping[str, Any]) -> BaseMessage:
 
         if _dict.get("reasoning_content"):
             additional_kwargs["reasoning_content"] = _dict["reasoning_content"]
+        
+        # Add provider_specific_fields if present
+        if _dict.get("provider_specific_fields"):
+            additional_kwargs["provider_specific_fields"] = _dict["provider_specific_fields"]
 
         return AIMessage(content=content, additional_kwargs=additional_kwargs)
     elif role == "system":
@@ -140,12 +144,14 @@ def _convert_delta_to_message_chunk(
         function_call = delta.get("function_call")
         raw_tool_calls = delta.get("tool_calls")
         reasoning_content = delta.get("reasoning_content")
+        provider_specific_fields = delta.get("provider_specific_fields")
     else:
         role = delta.role
         content = delta.content or ""
         function_call = delta.function_call
         raw_tool_calls = delta.tool_calls
         reasoning_content = getattr(delta, "reasoning_content", None)
+        provider_specific_fields = getattr(delta, "provider_specific_fields", None)
 
     if function_call:
         additional_kwargs = {"function_call": dict(function_call)}
@@ -157,6 +163,9 @@ def _convert_delta_to_message_chunk(
         additional_kwargs = {"reasoning_content": reasoning_content}
     else:
         additional_kwargs = {}
+    
+    if provider_specific_fields is not None:
+        additional_kwargs["provider_specific_fields"] = provider_specific_fields
 
     tool_call_chunks = []
     if raw_tool_calls:
@@ -456,6 +465,9 @@ class ChatLiteLLM(BaseChatModel):
         if self.model_name is not None:
             set_model_value = self.model_name
         llm_output = {"token_usage": token_usage, "model": set_model_value}
+        # Add provider_specific_fields if present at response level
+        if response.get("provider_specific_fields"):
+            llm_output["provider_specific_fields"] = response["provider_specific_fields"]
         return ChatResult(generations=generations, llm_output=llm_output)
 
     def _create_message_dicts(
