@@ -2,12 +2,12 @@
 
 from typing import Type
 
-from langchain_core.messages import AIMessageChunk
+from langchain_core.messages import AIMessageChunk, AIMessage
 from langchain_tests.unit_tests import ChatModelUnitTests
 from litellm.types.utils import ChatCompletionDeltaToolCall, Delta, Function
 
 from langchain_litellm.chat_models import ChatLiteLLM
-from langchain_litellm.chat_models.litellm import _convert_delta_to_message_chunk
+from langchain_litellm.chat_models.litellm import _convert_delta_to_message_chunk, _convert_dict_to_message
 
 
 class TestChatLiteLLMUnit(ChatModelUnitTests):
@@ -89,8 +89,6 @@ class TestChatLiteLLMUnit(ChatModelUnitTests):
 
     def test_convert_dict_to_tool_message(self):
         """Ensure tool role dicts convert to ToolMessage."""
-        from langchain_litellm.chat_models.litellm import _convert_dict_to_message
-
         mock_dict = {"role": "tool", "content": "result", "tool_call_id": "123"}
         message = _convert_dict_to_message(mock_dict)
         from langchain_core.messages import ToolMessage
@@ -98,3 +96,63 @@ class TestChatLiteLLMUnit(ChatModelUnitTests):
         assert isinstance(message, ToolMessage)
         assert message.content == "result"
         assert message.tool_call_id == "123"
+
+    def test_provider_specific_fields_in_delta(self):
+        """Test that provider_specific_fields are preserved when converting deltas."""
+        mock_delta = {
+            "role": "assistant",
+            "content": "Paris is the capital of France",
+            "provider_specific_fields": {
+                "citations": [
+                    {"source": "Wikipedia", "url": "https://en.wikipedia.org/wiki/Paris"}
+                ]
+            }
+        }
+        
+        chunk = _convert_delta_to_message_chunk(mock_delta, AIMessageChunk)
+        
+        assert isinstance(chunk, AIMessageChunk)
+        assert "provider_specific_fields" in chunk.additional_kwargs
+        assert chunk.additional_kwargs["provider_specific_fields"]["citations"][0]["source"] == "Wikipedia"
+
+    def test_provider_specific_fields_in_message(self):  # Added self here!
+        """Test that provider_specific_fields are preserved when converting message dicts."""
+        mock_message_dict = {
+            "role": "assistant",
+            "content": "The Earth orbits the Sun",
+            "provider_specific_fields": {
+                "grounding_metadata": {
+                    "search_queries": ["Earth orbit"],
+                    "grounding_supports": [{"segment": "The Earth orbits"}]
+                }
+            }
+        }
+        
+        message = _convert_dict_to_message(mock_message_dict)
+        
+        assert isinstance(message, AIMessage)
+        assert "provider_specific_fields" in message.additional_kwargs
+        assert "grounding_metadata" in message.additional_kwargs["provider_specific_fields"]
+
+    def test_provider_specific_fields_in_chat_result(self):  # Added self here!
+        """Test that top-level provider_specific_fields appear in llm_output."""
+        llm = ChatLiteLLM(model="gpt-3.5-turbo", api_key="fake")
+        
+        mock_response = {
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": "Test response"
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+            "provider_specific_fields": {
+                "citations": [{"source": "test"}]
+            }
+        }
+        
+        result = llm._create_chat_result(mock_response)
+        
+        assert "provider_specific_fields" in result.llm_output
+        assert result.llm_output["provider_specific_fields"]["citations"][0]["source"] == "test"
