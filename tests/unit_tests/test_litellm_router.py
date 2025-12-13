@@ -8,14 +8,13 @@ from langchain_litellm.chat_models import ChatLiteLLMRouter
 from tests.utils import test_router  
 
 
-class TestChatLiteLLMRouterUnit(ChatModelUnitTests):  # Changed class name to avoid conflict
+class TestChatLiteLLMRouterUnit(ChatModelUnitTests):
     @property
     def chat_model_class(self) -> Type[ChatLiteLLMRouter]:
         return ChatLiteLLMRouter
 
     @property
     def chat_model_params(self) -> dict:
-        # These should be parameters used to initialize your integration for testing
         return {
             "router": test_router(),
         }
