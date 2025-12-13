@@ -521,6 +521,16 @@ class ChatLiteLLM(BaseChatModel):
             if len(chunk["choices"]) == 0:
                 continue
             delta = chunk["choices"][0]["delta"]
+            # --- BRIDGE FIX: Inject Root Metadata into Delta ---
+            # 1. Grab metadata from the ROOT of the chunk
+            root_metadata = chunk.get("provider_specific_fields")
+            if not root_metadata:
+                root_metadata = chunk.get("vertex_ai_grounding_metadata")
+            
+            # 2. Inject it into the DELTA so the converter sees it
+            if root_metadata:
+                delta["provider_specific_fields"] = root_metadata
+            # ---------------------------------------------------
             chunk = _convert_delta_to_message_chunk(delta, default_chunk_class)
             if usage_metadata and isinstance(chunk, AIMessageChunk):
                 chunk.usage_metadata = usage_metadata
@@ -553,6 +563,14 @@ class ChatLiteLLM(BaseChatModel):
             if len(chunk["choices"]) == 0:
                 continue
             delta = chunk["choices"][0]["delta"]
+            # --- BRIDGE FIX: Inject Root Metadata into Delta ---
+            root_metadata = chunk.get("provider_specific_fields")
+            if not root_metadata:
+                root_metadata = chunk.get("vertex_ai_grounding_metadata")
+            
+            if root_metadata:
+                delta["provider_specific_fields"] = root_metadata
+            # ---------------------------------------------------
             chunk = _convert_delta_to_message_chunk(delta, default_chunk_class)
             if usage_metadata and isinstance(chunk, AIMessageChunk):
                 chunk.usage_metadata = usage_metadata
