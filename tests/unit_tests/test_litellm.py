@@ -17,7 +17,6 @@ class TestChatLiteLLMUnit(ChatModelUnitTests):
 
     @property
     def chat_model_params(self) -> dict:
-        # These should be parameters used to initialize your integration for testing
         return {
             "custom_llm_provider": "openai",
             "model": "gpt-3.5-turbo",
@@ -115,7 +114,7 @@ class TestChatLiteLLMUnit(ChatModelUnitTests):
         assert "provider_specific_fields" in chunk.additional_kwargs
         assert chunk.additional_kwargs["provider_specific_fields"]["citations"][0]["source"] == "Wikipedia"
 
-    def test_provider_specific_fields_in_message(self):  # Added self here!
+    def test_provider_specific_fields_in_message(self):
         """Test that provider_specific_fields are preserved when converting message dicts."""
         mock_message_dict = {
             "role": "assistant",
@@ -134,7 +133,7 @@ class TestChatLiteLLMUnit(ChatModelUnitTests):
         assert "provider_specific_fields" in message.additional_kwargs
         assert "grounding_metadata" in message.additional_kwargs["provider_specific_fields"]
 
-    def test_provider_specific_fields_in_chat_result(self):  # Added self here!
+    def test_provider_specific_fields_in_chat_result(self):
         """Test that top-level provider_specific_fields appear in llm_output."""
         llm = ChatLiteLLM(model="gpt-3.5-turbo", api_key="fake")
         

@@ -234,8 +234,14 @@ class ChatLiteLLMRouter(ChatLiteLLM):
             generations.append(gen)
         token_usage = response.get("usage", Usage(prompt_tokens=0, total_tokens=0))
         llm_output = get_llm_output(token_usage, **params)
+
+        # Check standard field first, then fallback to Vertex specific field
+        provider_specific_fields = response.get("provider_specific_fields")
+        if not provider_specific_fields:
+            provider_specific_fields = response.get("vertex_ai_grounding_metadata")
+
         # Add top-level provider_specific_fields if present in response
-        # (this is in addition to any metadata that might come through params)
-        if response.get("provider_specific_fields"):
-            llm_output["provider_specific_fields"] = response["provider_specific_fields"]
+        if provider_specific_fields:
+            llm_output["provider_specific_fields"] = provider_specific_fields
+            
         return ChatResult(generations=generations, llm_output=llm_output)
