@@ -53,7 +53,7 @@ This package contains the [LangChain](https://github.com/langchain-ai/langchain)
 ## Installation and setup
 
 ```bash
-pip install langchain-litellm
+pip install -U langchain-litellm
 ```
 
 ## Chat Models
@@ -66,4 +66,55 @@ from langchain_litellm import ChatLiteLLMRouter
 ```
 See a [usage example](https://github.com/Akshay-Dongare/langchain-litellm/blob/main/docs/litellm.ipynb)
 
+## Advanced Features
 
+<details>
+<summary><strong>Vertex AI Grounding (Google Search)</strong></summary>
+
+_Supported in v0.3.5+_
+
+You can use Google Search grounding with Vertex AI models (e.g., `gemini-2.5-flash`). Citations and metadata are returned in `response_metadata` (Batch) or `additional_kwargs` (Streaming).
+
+**Setup**
+
+```python
+import os
+from langchain_litellm import ChatLiteLLM
+
+os.environ["VERTEX_PROJECT"] = "your-project-id"
+os.environ["VERTEX_LOCATION"] = "us-central1"
+
+llm = ChatLiteLLM(model="vertex_ai/gemini-2.5-flash", temperature=0)
+```
+
+**Batch Usage**
+
+```python
+# Invoke with Google Search tool enabled
+response = llm.invoke(
+    "What is the current stock price of Google?",
+    tools=[{"googleSearch": {}}]
+)
+
+# Access Citations & Metadata
+provider_fields = response.response_metadata.get("provider_specific_fields")
+if provider_fields:
+    # Vertex returns a list; the first item contains the grounding info
+    print(provider_fields[0])
+```
+
+**Streaming Usage**
+
+```python
+stream = llm.stream(
+    "What is the current stock price of Google?",
+    tools=[{"googleSearch": {}}]
+)
+
+for chunk in stream:
+    print(chunk.content, end="", flush=True)
+    # Metadata is injected into the chunk where it arrives
+    if "provider_specific_fields" in chunk.additional_kwargs:
+        print("\n[Metadata Found]:", chunk.additional_kwargs["provider_specific_fields"])
+```
+</details>
