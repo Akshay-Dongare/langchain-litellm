@@ -759,15 +759,42 @@ class ChatLiteLLM(BaseChatModel):
     def _llm_type(self) -> str:
         return "litellm-chat"
 
-
 def _create_usage_metadata(token_usage: Mapping[str, Any]) -> UsageMetadata:
     input_tokens = token_usage.get("prompt_tokens", 0)
     output_tokens = token_usage.get("completion_tokens", 0)
-    return UsageMetadata(
+    
+    usage_metadata = UsageMetadata(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         total_tokens=input_tokens + output_tokens,
     )
+
+    # Extract cache token details from LiteLLM usage
+    input_token_details = {}
+    
+    # Try top-level keys (LiteLLM convenience fields)
+    cache_read = token_usage.get("cache_read_input_tokens")
+    cache_creation = token_usage.get("cache_creation_input_tokens")
+
+    # Fallback to nested prompt_tokens_details (Anthropic standard)
+    if cache_read is None or cache_creation is None:
+        prompt_details = token_usage.get("prompt_tokens_details")
+        if isinstance(prompt_details, dict):
+            if cache_read is None:
+                cache_read = prompt_details.get("cached_tokens")
+            if cache_creation is None:
+                cache_creation = prompt_details.get("cache_creation_tokens")
+
+    if cache_read is not None:
+        input_token_details["cache_read"] = int(cache_read)
+    
+    if cache_creation is not None:
+        input_token_details["cache_creation"] = int(cache_creation)
+
+    if input_token_details:
+        usage_metadata["input_token_details"] = input_token_details
+
+    return usage_metadata
 
 def _ensure_additional_properties_false(schema_dict: dict) -> dict:
     """Recursively ensure additionalProperties is set to false for all objects."""
