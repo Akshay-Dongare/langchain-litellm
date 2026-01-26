@@ -166,16 +166,11 @@ def _convert_delta_to_message_chunk(
         if not provider_specific_fields:
             provider_specific_fields = getattr(delta, "vertex_ai_grounding_metadata", None)
 
+    additional_kwargs = {}
     if function_call:
-        additional_kwargs = {"function_call": dict(function_call)}
-    # The hasattr check is necessary because litellm explicitly deletes the
-    # `reasoning_content` attribute when it is absent to comply with the OpenAI API.
-    # This ensures that the code gracefully handles cases where the attribute is
-    # missing, avoiding potential errors or non-compliance with the API.
-    elif reasoning_content:
-        additional_kwargs = {"reasoning_content": reasoning_content}
-    else:
-        additional_kwargs = {}
+        additional_kwargs["function_call"] = dict(function_call)
+    if reasoning_content:
+        additional_kwargs["reasoning_content"] = reasoning_content
     
     if provider_specific_fields is not None:
         additional_kwargs["provider_specific_fields"] = provider_specific_fields
@@ -815,4 +810,5 @@ def _ensure_additional_properties_false(schema_dict: dict) -> dict:
                 ]
         
         return result
+
     return schema_dict
