@@ -352,6 +352,7 @@ class ChatLiteLLM(BaseChatModel):
     api_base: Optional[str] = None
     organization: Optional[str] = None
     custom_llm_provider: Optional[str] = None
+    base_model: Optional[str] = None
     extra_headers: Optional[Dict[str, str]] = None
     request_timeout: Optional[Union[float, Tuple[float, float]]] = None
     temperature: Optional[float] = None
@@ -390,6 +391,7 @@ class ChatLiteLLM(BaseChatModel):
             "temperature": self.temperature,
             "custom_llm_provider": self.custom_llm_provider,
             "num_ctx": self.num_ctx,
+            "base_model": self.base_model,
             **self.model_kwargs,
         }
 
