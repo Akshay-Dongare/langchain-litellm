@@ -156,11 +156,13 @@ def _convert_delta_to_message_chunk(
         if not provider_specific_fields:
             provider_specific_fields = delta.get("vertex_ai_grounding_metadata")
     else:
-        role = delta.role
-        content = delta.content or ""
-        function_call = delta.function_call
-        raw_tool_calls = delta.tool_calls
+        # Safely access attributes with getattr
+        role = getattr(delta, "role", None)
+        content = getattr(delta, "content", "") or ""
+        function_call = getattr(delta, "function_call", None)
+        raw_tool_calls = getattr(delta, "tool_calls", None)
         reasoning_content = getattr(delta, "reasoning_content", None)
+        
         # Check standard field first, then fallback to Vertex specific field
         provider_specific_fields = getattr(delta, "provider_specific_fields", None)
         if not provider_specific_fields:
@@ -210,8 +212,8 @@ def _convert_delta_to_message_chunk(
             func_args = function_call.get("arguments", "") if function_call else ""
             func_name = function_call.get("name", "") if function_call else ""
         else:
-            func_args = delta.function_call.arguments if function_call else ""
-            func_name = delta.function_call.name if function_call else ""
+            func_args = function_call.arguments if function_call else ""
+            func_name = function_call.name if function_call else ""
         return FunctionMessageChunk(content=func_args, name=func_name)
     elif role or default_class == ChatMessageChunk:
         return ChatMessageChunk(content=content, role=role)  # type: ignore[arg-type]
