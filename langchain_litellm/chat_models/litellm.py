@@ -52,6 +52,10 @@ from langchain_core.messages import (
     ToolCallChunk,
     ToolMessage,
 )
+from langchain_core.messages.utils import (
+    convert_to_openai_data_block,
+    is_data_content_block,
+)
 from langchain_core.messages.ai import UsageMetadata
 from langchain_core.outputs import (
     ChatGeneration,
@@ -220,7 +224,6 @@ def _convert_delta_to_message_chunk(
     else:
         return default_class(content=content)  # type: ignore[call-arg]
 
-
 def _lc_tool_call_to_openai_tool_call(tool_call: ToolCall) -> dict:
     return {
         "type": "function",
@@ -231,15 +234,46 @@ def _lc_tool_call_to_openai_tool_call(tool_call: ToolCall) -> dict:
         },
     }
 
-
 def _convert_message_to_dict(message: BaseMessage) -> dict:
-    message_dict: Dict[str, Any] = {"content": message.content}
+    # Capture the original content from the message
+    content = message.content
+    
+    # Handle multimodal content conversion if the content is a list
+    if isinstance(content, list):
+        new_content = []
+        for item in content:
+            if isinstance(item, dict):
+                # Check for LiteLLM's native format which expects a 'file' key
+                # Preserve this format exactly as-is to avoid breaking existing LiteLLM implementations
+                if item.get("type") == "file" and "file" in item:
+                    new_content.append(item)
+                
+                # Check for LangChain's standard multimodal format (e.g., 'media', 'image_url')
+                # Convert these to the OpenAI/LiteLLM compatible format using the core utility
+                elif is_data_content_block(item):
+                    new_content.append(convert_to_openai_data_block(item))
+                
+                # Pass through standard text blocks or other unrecognized dict formats unchanged
+                else:
+                    new_content.append(item)
+            else:
+                # Append non-dict items (like strings) directly
+                new_content.append(item)
+        
+        # Update content with the processed list
+        content = new_content
+
+    # Initialize the message dictionary with the processed content
+    message_dict: Dict[str, Any] = {"content": content}
+    
+    # Determine the role and specific attributes based on the message type
     if isinstance(message, ChatMessage):
         message_dict["role"] = message.role
     elif isinstance(message, HumanMessage):
         message_dict["role"] = "user"
     elif isinstance(message, AIMessage):
         message_dict["role"] = "assistant"
+        # specific handling for function and tool calls in AI messages
         if "function_call" in message.additional_kwargs:
             message_dict["function_call"] = message.additional_kwargs["function_call"]
         if message.tool_calls:
@@ -258,10 +292,12 @@ def _convert_message_to_dict(message: BaseMessage) -> dict:
         message_dict["tool_call_id"] = message.tool_call_id
     else:
         raise ValueError(f"Got unknown type {message}")
+    
+    # Attach the name field if it exists in additional arguments
     if "name" in message.additional_kwargs:
         message_dict["name"] = message.additional_kwargs["name"]
+        
     return message_dict
-
 
 _OPENAI_MODELS = get_valid_models(custom_llm_provider="openai")
 
