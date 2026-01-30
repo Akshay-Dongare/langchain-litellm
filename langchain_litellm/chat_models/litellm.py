@@ -302,6 +302,9 @@ class ChatLiteLLM(BaseChatModel):
     """Number of chat completions to generate for each prompt. Note that the API may
        not return the full n completions if duplicates are generated."""
     max_tokens: Optional[int] = None
+    """The maximum number of tokens to generate in the reply."""
+    num_ctx: Optional[int] = None
+    """Context window size (e.g. for Ollama models)."""
 
     max_retries: int = 1
 
@@ -319,6 +322,7 @@ class ChatLiteLLM(BaseChatModel):
             "n": self.n,
             "temperature": self.temperature,
             "custom_llm_provider": self.custom_llm_provider,
+            "num_ctx": self.num_ctx,
             **self.model_kwargs,
         }
 
@@ -778,6 +782,7 @@ class ChatLiteLLM(BaseChatModel):
             "top_p": self.top_p,
             "top_k": self.top_k,
             "n": self.n,
+            "num_ctx": self.num_ctx,
         }
 
     @property
