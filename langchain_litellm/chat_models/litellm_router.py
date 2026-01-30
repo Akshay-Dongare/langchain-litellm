@@ -119,13 +119,27 @@ class ChatLiteLLMRouter(ChatLiteLLM):
         self._prepare_params_for_router(params)
 
         for chunk in self.router.completion(messages=message_dicts, **params):
-            if len(chunk["choices"]) == 0:
-                continue
+
             usage_metadata = None
             if "usage" in chunk and chunk["usage"]:
                 usage_metadata = _create_usage_metadata(chunk["usage"])
+
+            if len(chunk["choices"]) == 0:
+                # If the chunk has usage metadata but no content (typical for final stream chunk),
+                # yield it so the usage is not lost.
+                if usage_metadata:
+                    chunk_obj = default_chunk_class(content="", usage_metadata=usage_metadata)
+                    cg_chunk = ChatGenerationChunk(message=chunk_obj)
+                    if run_manager:
+                        run_manager.on_llm_new_token("", chunk=cg_chunk, **params)
+                    yield cg_chunk
+                continue
+
+            # Process standard content chunks
             delta = chunk["choices"][0]["delta"]
             chunk = _convert_delta_to_message_chunk(delta, default_chunk_class)
+
+            # Attach usage if it exists on a content chunk
             if usage_metadata and isinstance(chunk, AIMessageChunk):
                 chunk.usage_metadata = usage_metadata
             default_chunk_class = chunk.__class__
@@ -151,15 +165,30 @@ class ChatLiteLLMRouter(ChatLiteLLM):
         async for chunk in await self.router.acompletion(
             messages=message_dicts, **params
         ):
-            if len(chunk["choices"]) == 0:
-                continue
+            # Parse usage metadata first
             usage_metadata = None
             if "usage" in chunk and chunk["usage"]:
                 usage_metadata = _create_usage_metadata(chunk["usage"])
+
+            # Check for empty choices
+            if len(chunk["choices"]) == 0:
+                # Yield pure usage chunk if present
+                if usage_metadata:
+                    chunk_obj = default_chunk_class(content="", usage_metadata=usage_metadata)
+                    cg_chunk = ChatGenerationChunk(message=chunk_obj)
+                    if run_manager:
+                        await run_manager.on_llm_new_token(
+                            "", chunk=cg_chunk, **params
+                        )
+                    yield cg_chunk
+                continue
+
             delta = chunk["choices"][0]["delta"]
             chunk = _convert_delta_to_message_chunk(delta, default_chunk_class)
+
             if usage_metadata and isinstance(chunk, AIMessageChunk):
                 chunk.usage_metadata = usage_metadata
+
             default_chunk_class = chunk.__class__
             cg_chunk = ChatGenerationChunk(message=chunk)
             if run_manager:
