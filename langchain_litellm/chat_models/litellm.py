@@ -83,7 +83,6 @@ logger = logging.getLogger(__name__)
 class ChatLiteLLMException(Exception):
     """Error with the `LiteLLM I/O` library"""
 
-
 def _create_retry_decorator(
     llm: ChatLiteLLM,
     run_manager: Optional[
@@ -337,9 +336,7 @@ class ChatLiteLLM(BaseChatModel):
     client: Any = None  #: :meta private:
     model: str = "gpt-3.5-turbo"
     model_name: Optional[str] = None
-    stream_options: Optional[Dict[str, Any]] = Field(
-        default_factory=lambda: {"include_usage": True}
-    )
+    stream_options: Optional[Dict[str, Any]] = None
     """Model name to use."""
     openai_api_key: Optional[str] = None
     azure_api_key: Optional[str] = None
@@ -566,6 +563,15 @@ class ChatLiteLLM(BaseChatModel):
             params["stop"] = stop
         message_dicts = [_convert_message_to_dict(m) for m in messages]
         return message_dicts, params
+    
+    def _is_openai(self) -> bool:
+        """Check if the current model is OpenAI or Azure."""
+        model = self.model_name or self.model or ""
+        if self.custom_llm_provider == "openai" or self.custom_llm_provider == "azure":
+            return True
+        if "azure" in model or model in _OPENAI_MODELS:
+            return True
+        return False
 
     def _stream(
         self,
@@ -576,7 +582,10 @@ class ChatLiteLLM(BaseChatModel):
     ) -> Iterator[ChatGenerationChunk]:
         message_dicts, params = self._create_message_dicts(messages, stop)
         params = {**params, **kwargs, "stream": True}
-        params["stream_options"] = self.stream_options
+        if self.stream_options is not None:
+            params["stream_options"] = self.stream_options
+        elif self._is_openai():
+            params["stream_options"] = {"include_usage": True}
         default_chunk_class = AIMessageChunk
         
         for chunk in self.completion_with_retry(
@@ -632,7 +641,10 @@ class ChatLiteLLM(BaseChatModel):
     ) -> AsyncIterator[ChatGenerationChunk]:
         message_dicts, params = self._create_message_dicts(messages, stop)
         params = {**params, **kwargs, "stream": True}
-        params["stream_options"] = self.stream_options
+        if self.stream_options is not None:
+            params["stream_options"] = self.stream_options
+        elif self._is_openai():
+            params["stream_options"] = {"include_usage": True}
         default_chunk_class = AIMessageChunk
         
         async for chunk in await self.acompletion_with_retry(
