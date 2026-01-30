@@ -109,32 +109,61 @@ def _convert_dict_to_message(_dict: Mapping[str, Any]) -> BaseMessage:
     if role == "user":
         return HumanMessage(content=_dict["content"])
     elif role == "assistant":
-        # Fix for azure
-        # Also OpenAI returns None for tool invocations
         content = _dict.get("content", "") or ""
 
         additional_kwargs = {}
+        tool_calls = []
+
         if _dict.get("function_call"):
             additional_kwargs["function_call"] = dict(_dict["function_call"])
 
         if _dict.get("tool_calls"):
             additional_kwargs["tool_calls"] = _dict["tool_calls"]
+            
+            # Populate standard tool_calls attribute
+            for tc in _dict["tool_calls"]:
+                try:
+                    # Handle both dict and object (Pydantic) access safely
+                    tc_id = tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
+                    
+                    func = tc.get("function") if isinstance(tc, dict) else getattr(tc, "function", None)
+                    if func:
+                        func_name = func.get("name") if isinstance(func, dict) else getattr(func, "name", None)
+                        func_args = func.get("arguments") if isinstance(func, dict) else getattr(func, "arguments", None)
+                        
+                        # Handle JSON String arguments (e.g., OpenAI)
+                        if isinstance(func_args, str):
+                            try:
+                                func_args = json.loads(func_args)
+                            except json.JSONDecodeError:
+                                pass # Keep as string or empty if strictly required
+                        
+                        # Ensure args is a dict (e.g., already parsed Dict from Vertex)
+                        if not isinstance(func_args, dict):
+                            func_args = {}
+
+                        tool_calls.append(ToolCall(
+                            name=func_name or "",
+                            args=func_args,
+                            id=tc_id or ""
+                        ))
+                except Exception:
+                    # Prevent crash on malformed tool call
+                    pass
 
         if _dict.get("reasoning_content"):
             additional_kwargs["reasoning_content"] = _dict["reasoning_content"]
         
-        # Check litellm's response for provider specific fields
+        # Check standard field first, then fallback to Vertex specific field
         provider_specific_fields = _dict.get("provider_specific_fields")
-        
-        # Check if litellm's response has null provider_specific_fields but has Vertex AI specific fields
         if not provider_specific_fields:
             provider_specific_fields = _dict.get("vertex_ai_grounding_metadata")
         
-        # Attach provider specific fields if present
         if provider_specific_fields:
             additional_kwargs["provider_specific_fields"] = provider_specific_fields
 
-        return AIMessage(content=content, additional_kwargs=additional_kwargs)
+        return AIMessage(content=content, additional_kwargs=additional_kwargs, tool_calls=tool_calls)
+        
     elif role == "system":
         return SystemMessage(content=_dict["content"])
     elif role == "function":
@@ -703,18 +732,15 @@ class ChatLiteLLM(BaseChatModel):
 
         formatted_tools = [convert_to_openai_tool(tool) for tool in tools]
 
-        # In case of openai if tool_choice is `any` or if bool has been provided we
-        # change it to `required` as that is supported by openai.
-        if (
-            (self.model is not None and "azure" in self.model)
-            or (self.model_name is not None and "azure" in self.model_name)
-            or (self.model is not None and self.model in _OPENAI_MODELS)
-            or (self.model_name is not None and self.model_name in _OPENAI_MODELS)
-        ) and (tool_choice == "any" or isinstance(tool_choice, bool)):
-            tool_choice = "required"
-        # If tool_choice is bool apart from openai we make it `any`
-        elif isinstance(tool_choice, bool):
-            tool_choice = "any"
+        # Robustly handle tool_choice='any' or True for ALL providers.
+        # Many providers (Gemini, Vertex, etc.) via LiteLLM reject "any" but accept "required".
+        # We map "any" (or True) to "required" globally to prevent crashes.
+        if tool_choice == "any" or isinstance(tool_choice, bool):
+            if tool_choice is True or tool_choice == "any":
+                tool_choice = "required"
+            # if tool_choice is False, we leave it (it behaves like None/auto depending on provider)
+        
+        # Handle dict tool_choice logic
         elif isinstance(tool_choice, dict):
             tool_names = [
                 formatted_tool["function"]["name"] for formatted_tool in formatted_tools
@@ -726,13 +752,14 @@ class ChatLiteLLM(BaseChatModel):
                     f"Tool choice {tool_choice} was specified, but the only "
                     f"provided tools were {tool_names}."
                 )
+
         return super().bind(tools=formatted_tools, tool_choice=tool_choice, **kwargs)
     
     def with_structured_output(
         self,
         schema: Union[Dict[str, Any], type, BaseModel],
         *,
-        method: Optional[Literal["json_schema", "function_calling"]] = "json_schema",
+        method: Optional[Literal["json_schema", "function_calling", "json_mode"]] = "json_schema",
         include_raw: bool = False,
         strict: Optional[bool] = None,
         **kwargs: Any,
@@ -744,13 +771,17 @@ class ChatLiteLLM(BaseChatModel):
             raise ValueError(msg)         
 
         if method == "function_calling":
+            # Determine appropriate tool_choice based on model
+            # Use "required" for most models, which is more widely supported than "any"
+            tool_choice_value = "required"
+            
             # pydantic
             if isinstance(schema, type) and is_basemodel_subclass(schema):
                 parser = PydanticToolsParser(
                     tools=[cast(TypeBaseModel, schema)], 
                     first_tool_only=True
                 )
-                llm = self.bind_tools([schema], tool_choice="required")
+                llm = self.bind_tools([schema], tool_choice=tool_choice_value)
             # dict or typeddict
             elif is_typeddict(schema) or isinstance(schema, dict):
                 tool_def = convert_to_openai_tool(schema)
@@ -759,7 +790,7 @@ class ChatLiteLLM(BaseChatModel):
                     key_name=function_name,
                     first_tool_only=True
                 )
-                llm = self.bind_tools([tool_def], tool_choice="required")
+                llm = self.bind_tools([tool_def], tool_choice=tool_choice_value)
             else:                
                 msg = f"Unsupported schema type {type(schema)}"
                 raise ValueError(msg)
@@ -795,6 +826,22 @@ class ChatLiteLLM(BaseChatModel):
                     }
                 }
             )
+        
+        elif method == "json_mode":
+            # Setup parser for JSON text
+            if isinstance(schema, type) and is_basemodel_subclass(schema):
+                parser = PydanticOutputParser(pydantic_object=schema)
+            else:
+                parser = JsonOutputParser()
+            
+            # Setup LLM with json_mode (simpler than json_schema)
+            llm = self.bind(
+                response_format={"type": "json_object"}
+            )
+        
+        else:
+            msg = f"Unsupported method '{method}'. Must be 'json_schema', 'function_calling', or 'json_mode'"
+            raise ValueError(msg)
     
         if include_raw:
             parser_with_fallback = RunnablePassthrough.assign(
