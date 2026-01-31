@@ -1,4 +1,4 @@
-name: PR Quality Checks & Auto-Format
+name: PR Quality Checks & Auto-Fix
 
 on:
   push:
@@ -26,30 +26,29 @@ jobs:
       - name: Install Poetry
         run: curl -sSL https://install.python-poetry.org | python3 -
 
-      - name: Install Dependencies
-        run: poetry install --with dev,lint,test,codespell
-
-      # --- AUTO-FIX SECTION ---
-      # Runs formatters AND spell-fixer.
-      # If changes are made, they are committed back to the PR automatically.
-      
-      - name: Auto-Format & Fix Typos
+      # --- SELF-HEALING SECTION ---
+      - name: Auto-Fix (Lock, Format, Typos)
         run: |
+          # Fix stale lock file using Makefile
+          make lock_fix
+          
+          # Install dependencies (now guaranteed to work)
+          poetry install --with dev,lint,test,codespell
+          
+          # Fix code and typos using Makefile
           make format
           make spell_fix
 
       - name: Commit & Push Fixes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "style: auto-format code and fix typos"
+          commit_message: "chore: auto-fix lockfile, formatting, and typos"
           branch: ${{ github.head_ref }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # --- STRICT CHECKS SECTION ---
-      # These run AFTER the auto-fixes. If strict checks fail, the PR is blocked.
-
-      - name: Run Linters (Ruff + MyPy)
+      - name: Run Linters
         run: make lint
 
       - name: Verify Strict Imports
