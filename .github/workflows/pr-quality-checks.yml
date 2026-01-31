@@ -1,0 +1,61 @@
+name: PR Quality Checks & Auto-Format
+
+on:
+  push:
+    branches: [ "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+permissions:
+  contents: write
+
+jobs:
+  quality-control:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        run: curl -sSL https://install.python-poetry.org | python3 -
+
+      - name: Install Dependencies
+        run: poetry install --with dev,lint,test,codespell
+
+      # --- AUTO-FIX SECTION ---
+      # Runs formatters AND spell-fixer.
+      # If changes are made, they are committed back to the PR automatically.
+      
+      - name: Auto-Format & Fix Typos
+        run: |
+          make format
+          make spell_fix
+
+      - name: Commit & Push Fixes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "style: auto-format code and fix typos"
+          branch: ${{ github.head_ref }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # --- STRICT CHECKS SECTION ---
+      # These run AFTER the auto-fixes. If strict checks fail, the PR is blocked.
+
+      - name: Run Linters (Ruff + MyPy)
+        run: make lint
+
+      - name: Verify Strict Imports
+        run: |
+          make lint_imports
+          make check_imports
+
+      - name: Run Tests
+        run: make tests
