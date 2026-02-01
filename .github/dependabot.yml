@@ -1,0 +1,23 @@
+version: 2
+updates:
+  # Dev Container Updates
+  # Groups any updates to the base image (like python:3.12-bookworm)
+  - package-ecosystem: "devcontainers"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      dev-container-updates:
+        patterns:
+          - "*"
+
+  # Python Library Updates (Poetry/Pip)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # This forces Dependabot to bundle all python updates into ONE weekly PR.
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
