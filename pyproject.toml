@@ -25,6 +25,9 @@ litellm = "^1.77.2"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "T201"]
+# Ignore print (T201) and line-length (E501) in notebooks
+[tool.ruff.lint.per-file-ignores]
+"**/*.ipynb" = ["T201", "E501"]
 
 [tool.coverage.run]
 omit = ["tests/*"]

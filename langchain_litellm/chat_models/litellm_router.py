@@ -124,7 +124,8 @@ class ChatLiteLLMRouter(ChatLiteLLM):
                 usage_metadata = _create_usage_metadata(chunk["usage"])
 
             if len(chunk["choices"]) == 0:
-                # If the chunk has usage metadata but no content (typical for final stream chunk),
+                # If the chunk has usage metadata but no content
+                # (typical for final stream chunk),
                 # yield it so the usage is not lost.
                 if usage_metadata:
                     chunk_obj = default_chunk_class(

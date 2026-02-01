@@ -294,16 +294,20 @@ def _convert_message_to_dict(message: BaseMessage) -> dict:
         for item in content:
             if isinstance(item, dict):
                 # Check for LiteLLM's native format which expects a 'file' key
-                # Preserve this format exactly as-is to avoid breaking existing LiteLLM implementations
+                # Preserve this format exactly as-is to avoid existing LiteLLM
+                # implementations
                 if item.get("type") == "file" and "file" in item:
                     new_content.append(item)
 
-                # Check for LangChain's standard multimodal format (e.g., 'media', 'image_url')
-                # Convert these to the OpenAI/LiteLLM compatible format using the core utility
+                # Check for LangChain's standard multimodal format
+                # (e.g., 'media', 'image_url')
+                # Convert these to the OpenAI/LiteLLM compatible format using the core
+                # utility
                 elif is_data_content_block(item):
                     new_content.append(convert_to_openai_data_block(item))
 
-                # Pass through standard text blocks or other unrecognized dict formats unchanged
+                # Pass through standard text blocks or other unrecognized dict formats
+                # unchanged
                 else:
                     new_content.append(item)
             else:
@@ -775,12 +779,14 @@ class ChatLiteLLM(BaseChatModel):
         formatted_tools = [convert_to_openai_tool(tool) for tool in tools]
 
         # Robustly handle tool_choice='any' or True for ALL providers.
-        # Many providers (Gemini, Vertex, etc.) via LiteLLM reject "any" but accept "required".
+        # Many providers (Gemini, Vertex, etc.) via LiteLLM reject "any"
+        # but accept "required".
         # We map "any" (or True) to "required" globally to prevent crashes.
         if tool_choice == "any" or isinstance(tool_choice, bool):
             if tool_choice is True or tool_choice == "any":
                 tool_choice = "required"
-            # if tool_choice is False, we leave it (it behaves like None/auto depending on provider)
+            # if tool_choice is False, we leave it (it behaves like None/auto
+            # depending on provider)
 
         # Handle dict tool_choice logic
         elif isinstance(tool_choice, dict):
@@ -879,7 +885,10 @@ class ChatLiteLLM(BaseChatModel):
             llm = self.bind(response_format={"type": "json_object"})
 
         else:
-            msg = f"Unsupported method '{method}'. Must be 'json_schema', 'function_calling', or 'json_mode'"
+            msg = (
+                f"Unsupported method '{method}'. Must be 'json_schema', "
+                "'function_calling', or 'json_mode'"
+            )
             raise ValueError(msg)
 
         if include_raw:

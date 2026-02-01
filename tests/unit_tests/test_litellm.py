@@ -60,7 +60,9 @@ class TestChatLiteLLMUnit(ChatModelUnitTests):
         return False
 
     def test_litellm_delta_to_langchain_message_chunk(self):
-        """Test the litellm._convert_delta_to_message_chunk method, to ensure compatibility when converting a LiteLLM delta to a LangChain message chunk."""
+        """Test the litellm._convert_delta_to_message_chunk method,
+        to ensure compatibility when converting a LiteLLM delta to
+        a LangChain message chunk."""
         mock_content = "This is a test content"
         mock_tool_call_id = "call_test"
         mock_tool_call_name = "test_tool_call"
@@ -126,7 +128,8 @@ class TestChatLiteLLMUnit(ChatModelUnitTests):
         )
 
     def test_provider_specific_fields_in_message(self):
-        """Test that provider_specific_fields are preserved when converting message dicts."""
+        """Test that provider_specific_fields are preserved when converting
+        message dicts."""
         mock_message_dict = {
             "role": "assistant",
             "content": "The Earth orbits the Sun",

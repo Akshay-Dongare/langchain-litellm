@@ -31,10 +31,10 @@ jobs:
         run: |
           # Fix stale lock file using Makefile
           make lock_fix
-          
+
           # Install dependencies (now guaranteed to work)
           poetry install --with dev,lint,test,codespell
-          
+
           # Fix code and typos using Makefile
           make format
           make spell_fix
