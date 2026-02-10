@@ -364,3 +364,171 @@ class TestLiteLLMOCRLoaderLazyLoad:
         assert len(documents) == 2
         assert documents[0].page_content == "# Page 1\n\nThis is the first page."
         assert documents[1].page_content == "# Page 2\n\nThis is the second page."
+
+
+class TestLiteLLMOCRLoaderTimeoutAndRetry:
+    """Test configurable timeout and retry logic."""
+
+    def test_default_timeout_and_retries(self) -> None:
+        """Test default timeout and max_retries values."""
+        loader = LiteLLMOCRLoader(url_path="https://example.com/doc.pdf")
+        assert loader.timeout == 300.0
+        assert loader.max_retries == 3
+
+    def test_custom_timeout_and_retries(self) -> None:
+        """Test custom timeout and max_retries values."""
+        loader = LiteLLMOCRLoader(
+            url_path="https://example.com/doc.pdf",
+            timeout=60.0,
+            max_retries=5,
+        )
+        assert loader.timeout == 60.0
+        assert loader.max_retries == 5
+
+    @patch("httpx.Client")
+    def test_timeout_passed_to_client(
+        self,
+        mock_client_class: MagicMock,
+        mock_ocr_response: Dict[str, Any],
+    ) -> None:
+        """Test that custom timeout is passed to httpx.Client."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = mock_ocr_response
+
+        mock_client = MagicMock()
+        mock_client.__enter__.return_value = mock_client
+        mock_client.post.return_value = mock_response
+        mock_client_class.return_value = mock_client
+
+        loader = LiteLLMOCRLoader(
+            url_path="https://example.com/doc.pdf",
+            timeout=60.0,
+        )
+        loader.load()
+
+        mock_client_class.assert_called_with(timeout=60.0)
+
+    @patch("time.sleep")
+    @patch("httpx.Client")
+    def test_retry_on_request_error(
+        self,
+        mock_client_class: MagicMock,
+        mock_sleep: MagicMock,
+        mock_ocr_response: Dict[str, Any],
+    ) -> None:
+        """Test that transient RequestError triggers retries."""
+        import httpx
+
+        mock_success_response = MagicMock()
+        mock_success_response.json.return_value = mock_ocr_response
+
+        mock_client = MagicMock()
+        mock_client.__enter__.return_value = mock_client
+        # Fail twice, then succeed on third attempt
+        mock_client.post.side_effect = [
+            httpx.RequestError("Connection reset"),
+            httpx.RequestError("Connection reset"),
+            mock_success_response,
+        ]
+        mock_client_class.return_value = mock_client
+
+        loader = LiteLLMOCRLoader(
+            url_path="https://example.com/doc.pdf",
+            max_retries=3,
+        )
+        documents = loader.load()
+
+        assert len(documents) == 1
+        assert mock_client.post.call_count == 3
+        # Exponential backoff: sleep(1), sleep(2)
+        assert mock_sleep.call_count == 2
+        mock_sleep.assert_any_call(1)
+        mock_sleep.assert_any_call(2)
+
+    @patch("time.sleep")
+    @patch("httpx.Client")
+    def test_retry_on_http_status_error(
+        self,
+        mock_client_class: MagicMock,
+        mock_sleep: MagicMock,
+        mock_ocr_response: Dict[str, Any],
+    ) -> None:
+        """Test that HTTPStatusError triggers retries."""
+        import httpx
+
+        mock_error_response = MagicMock()
+        mock_error_response.status_code = 503
+        mock_error_response.text = "Service Unavailable"
+
+        mock_success_response = MagicMock()
+        mock_success_response.json.return_value = mock_ocr_response
+
+        mock_client = MagicMock()
+        mock_client.__enter__.return_value = mock_client
+        mock_client.post.side_effect = [
+            httpx.HTTPStatusError(
+                "Error", request=MagicMock(), response=mock_error_response
+            ),
+            mock_success_response,
+        ]
+        mock_client_class.return_value = mock_client
+
+        loader = LiteLLMOCRLoader(
+            url_path="https://example.com/doc.pdf",
+            max_retries=3,
+        )
+        documents = loader.load()
+
+        assert len(documents) == 1
+        assert mock_client.post.call_count == 2
+        assert mock_sleep.call_count == 1
+        mock_sleep.assert_called_with(1)
+
+    @patch("time.sleep")
+    @patch("httpx.Client")
+    def test_retries_exhausted_raises_error(
+        self,
+        mock_client_class: MagicMock,
+        mock_sleep: MagicMock,
+    ) -> None:
+        """Test that exhausted retries raise the last error."""
+        import httpx
+
+        mock_client = MagicMock()
+        mock_client.__enter__.return_value = mock_client
+        mock_client.post.side_effect = httpx.RequestError("Connection failed")
+        mock_client_class.return_value = mock_client
+
+        loader = LiteLLMOCRLoader(
+            url_path="https://example.com/doc.pdf",
+            max_retries=3,
+        )
+
+        with pytest.raises(RuntimeError, match="Failed to connect"):
+            loader.load()
+
+        assert mock_client.post.call_count == 3
+        assert mock_sleep.call_count == 2
+
+    @patch("httpx.Client")
+    def test_max_retries_one_no_retry(
+        self,
+        mock_client_class: MagicMock,
+    ) -> None:
+        """Test that max_retries=1 means no retries on failure."""
+        import httpx
+
+        mock_client = MagicMock()
+        mock_client.__enter__.return_value = mock_client
+        mock_client.post.side_effect = httpx.RequestError("Connection failed")
+        mock_client_class.return_value = mock_client
+
+        loader = LiteLLMOCRLoader(
+            url_path="https://example.com/doc.pdf",
+            max_retries=1,
+        )
+
+        with pytest.raises(RuntimeError, match="Failed to connect"):
+            loader.load()
+
+        assert mock_client.post.call_count == 1

@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
+import logging
 import mimetypes
 from contextlib import contextmanager
 from typing import Any, Dict, Iterator, List, Literal, Optional
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from langchain_core.document_loaders import BaseLoader
 from langchain_core.documents import Document
@@ -31,6 +35,9 @@ class LiteLLMOCRLoader(BaseLoader):
         bytes_content: Raw bytes of a document.
         mode: Output mode - "single" returns one document with all content,
             "page" returns one document per page. Defaults to "single".
+        timeout: Timeout in seconds for HTTP requests. Defaults to 300.
+        max_retries: Maximum number of retry attempts for failed requests.
+            Uses exponential backoff between retries. Defaults to 3.
 
     Note:
         Exactly one of file_path, url_path, base64_content, or bytes_content
@@ -75,6 +82,8 @@ class LiteLLMOCRLoader(BaseLoader):
         base64_content: Optional[str] = None,
         bytes_content: Optional[bytes] = None,
         mode: Literal["single", "page"] = "single",
+        timeout: float = 300.0,
+        max_retries: int = 3,
     ) -> None:
         """Initialize the LiteLLM OCR loader."""
         # Validate input sources
@@ -112,6 +121,8 @@ class LiteLLMOCRLoader(BaseLoader):
         self.base64_content = base64_content
         self.bytes_content = bytes_content
         self.mode = mode
+        self.timeout = timeout
+        self.max_retries = max_retries
 
     def _prepare_document_payload(self) -> Dict[str, Any]:
         """Prepare the document payload for the OCR request.
@@ -212,39 +223,82 @@ class LiteLLMOCRLoader(BaseLoader):
         }
 
         if sync:
-            with httpx.Client(timeout=300.0) as client:
-                try:
-                    response = client.post(url, json=payload, headers=headers)
-                    response.raise_for_status()
-                    return response.json()
-                except httpx.HTTPStatusError as e:
-                    raise RuntimeError(
-                        f"HTTP error from LiteLLM proxy: {e.response.status_code} "
-                        f"{e.response.text}"
-                    ) from e
-                except httpx.RequestError as e:
-                    raise RuntimeError(
-                        f"Failed to connect to LiteLLM proxy at {url}. "
-                        f"Is the proxy running? Error: {e}"
-                    ) from e
-        else:
-            # Return a coroutine for async
-            async def _async_request() -> Dict[str, Any]:
-                async with httpx.AsyncClient(timeout=300.0) as client:
+            last_exception: Optional[Exception] = None
+            for attempt in range(self.max_retries):
+                with httpx.Client(timeout=self.timeout) as client:
                     try:
-                        response = await client.post(url, json=payload, headers=headers)
+                        response = client.post(
+                            url, json=payload, headers=headers
+                        )
                         response.raise_for_status()
                         return response.json()
                     except httpx.HTTPStatusError as e:
-                        raise RuntimeError(
-                            f"HTTP error from LiteLLM proxy: {e.response.status_code} "
+                        last_exception = RuntimeError(
+                            f"HTTP error from LiteLLM proxy: "
+                            f"{e.response.status_code} "
                             f"{e.response.text}"
-                        ) from e
+                        )
+                        last_exception.__cause__ = e
                     except httpx.RequestError as e:
-                        raise RuntimeError(
+                        last_exception = RuntimeError(
                             f"Failed to connect to LiteLLM proxy at {url}. "
                             f"Is the proxy running? Error: {e}"
-                        ) from e
+                        )
+                        last_exception.__cause__ = e
+
+                if attempt < self.max_retries - 1:
+                    import time
+                    wait_time = 2 ** attempt
+                    logger.warning(
+                        "Request attempt %d/%d failed, retrying in %ds: %s",
+                        attempt + 1,
+                        self.max_retries,
+                        wait_time,
+                        last_exception,
+                    )
+                    time.sleep(wait_time)
+
+            raise last_exception  # type: ignore[misc]
+        else:
+            # Return a coroutine for async
+            async def _async_request() -> Dict[str, Any]:
+                last_exception: Optional[Exception] = None
+                for attempt in range(self.max_retries):
+                    async with httpx.AsyncClient(timeout=self.timeout) as client:
+                        try:
+                            response = await client.post(
+                                url, json=payload, headers=headers
+                            )
+                            response.raise_for_status()
+                            return response.json()
+                        except httpx.HTTPStatusError as e:
+                            last_exception = RuntimeError(
+                                f"HTTP error from LiteLLM proxy: "
+                                f"{e.response.status_code} "
+                                f"{e.response.text}"
+                            )
+                            last_exception.__cause__ = e
+                        except httpx.RequestError as e:
+                            last_exception = RuntimeError(
+                                f"Failed to connect to LiteLLM proxy at "
+                                f"{url}. "
+                                f"Is the proxy running? Error: {e}"
+                            )
+                            last_exception.__cause__ = e
+
+                    if attempt < self.max_retries - 1:
+                        wait_time = 2 ** attempt
+                        logger.warning(
+                            "Request attempt %d/%d failed, retrying in "
+                            "%ds: %s",
+                            attempt + 1,
+                            self.max_retries,
+                            wait_time,
+                            last_exception,
+                        )
+                        await asyncio.sleep(wait_time)
+
+                raise last_exception  # type: ignore[misc]
 
             return _async_request()
 
