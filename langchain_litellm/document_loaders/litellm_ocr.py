@@ -239,7 +239,12 @@ class LiteLLMOCRLoader(BaseLoader):
                             break
 
             # Build detailed error message
-            error_msg = f"LiteLLM OCR request failed after {self.max_retries} retries."
+            attempts = attempt + 1
+            if attempts == 1:
+                error_msg = "LiteLLM OCR request failed after 1 attempt."
+            else:
+                error_msg = f"LiteLLM OCR request failed after {attempts} attempts."
+            
             if isinstance(last_error, httpx.HTTPStatusError):
                 status = last_error.response.status_code
                 body = last_error.response.text[:500]  # Limit body length
@@ -268,7 +273,12 @@ class LiteLLMOCRLoader(BaseLoader):
                                 break
 
                 # Build detailed error message
-                error_msg = f"LiteLLM OCR request failed after {self.max_retries} retries."
+                attempts = attempt + 1
+                if attempts == 1:
+                    error_msg = "LiteLLM OCR request failed after 1 attempt."
+                else:
+                    error_msg = f"LiteLLM OCR request failed after {attempts} attempts."
+                
                 if isinstance(last_error, httpx.HTTPStatusError):
                     status = last_error.response.status_code
                     body = last_error.response.text[:500]  # Limit body length

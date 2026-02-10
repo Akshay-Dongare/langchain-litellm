@@ -483,7 +483,7 @@ class TestLiteLLMOCRLoaderResilience:
             max_retries=2
         )
 
-        with pytest.raises(RuntimeError, match="failed after 2 retries"):
+        with pytest.raises(RuntimeError, match="failed after 3 attempts"):
             loader.load()
 
         # Called 3 times (1 initial + 2 retries)
