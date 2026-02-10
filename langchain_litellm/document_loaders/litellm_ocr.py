@@ -31,6 +31,10 @@ class LiteLLMOCRLoader(BaseLoader):
         bytes_content: Raw bytes of a document.
         mode: Output mode - "single" returns one document with all content,
             "page" returns one document per page. Defaults to "single".
+        timeout: Request timeout in seconds. Must be positive.
+            Defaults to 300.0 (5 minutes).
+        max_retries: Maximum number of retry attempts for failed requests.
+            Must be non-negative. Defaults to 3.
 
     Note:
         Exactly one of file_path, url_path, base64_content, or bytes_content
@@ -105,6 +109,12 @@ class LiteLLMOCRLoader(BaseLoader):
                 f"proxy_base_url must start with http:// or https://, "
                 f"got: {proxy_base_url}"
             )
+
+        # Validate timeout and max_retries
+        if timeout <= 0:
+            raise ValueError(f"timeout must be positive, got: {timeout}")
+        if max_retries < 0:
+            raise ValueError(f"max_retries must be non-negative, got: {max_retries}")
 
         self.proxy_base_url = proxy_base_url.rstrip("/")
         self.api_key = api_key
@@ -202,44 +212,71 @@ class LiteLLMOCRLoader(BaseLoader):
 
         payload = {"model": self.model, "document": document_payload}
 
+        def _is_transient_error(error: Exception) -> bool:
+            """Check if error is transient and worth retrying."""
+            if isinstance(error, httpx.HTTPStatusError):
+                # Only retry on transient HTTP status codes
+                status = error.response.status_code
+                return status in (408, 429) or status >= 500
+            # Always retry on request errors (connection, timeout, etc.)
+            return isinstance(error, httpx.RequestError)
+
         if sync:
             last_error = None
-            for attempt in range(self.max_retries + 1):
-                try:
-                    with httpx.Client(timeout=self.timeout) as client:
+            with httpx.Client(timeout=self.timeout) as client:
+                for attempt in range(self.max_retries + 1):
+                    try:
                         response = client.post(url, json=payload, headers=headers)
                         response.raise_for_status()
                         return response.json()
-                except (httpx.RequestError, httpx.HTTPStatusError) as e:
-                    last_error = e
-                    if attempt < self.max_retries:
-                        sleep_time = 1 * (2 ** attempt)  # Exponential backoff
-                        time.sleep(sleep_time)
-                    else:
-                        break
-            raise RuntimeError(
-                f"LiteLLM OCR request failed after {self.max_retries} retries. Error: {last_error}"
-            ) from last_error
+                    except (httpx.RequestError, httpx.HTTPStatusError) as e:
+                        last_error = e
+                        # Only retry if it's a transient error and we have retries left
+                        if attempt < self.max_retries and _is_transient_error(e):
+                            sleep_time = 1 * (2 ** attempt)  # Exponential backoff
+                            time.sleep(sleep_time)
+                        else:
+                            break
+
+            # Build detailed error message
+            error_msg = f"LiteLLM OCR request failed after {self.max_retries} retries."
+            if isinstance(last_error, httpx.HTTPStatusError):
+                status = last_error.response.status_code
+                body = last_error.response.text[:500]  # Limit body length
+                error_msg += f" Status: {status}, Response: {body}"
+            else:
+                error_msg += f" Error: {last_error}"
+            
+            raise RuntimeError(error_msg) from last_error
 
         else:
             async def _async_request() -> Dict[str, Any]:
                 last_error = None
-                for attempt in range(self.max_retries + 1):
-                    try:
-                        async with httpx.AsyncClient(timeout=self.timeout) as client:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    for attempt in range(self.max_retries + 1):
+                        try:
                             response = await client.post(url, json=payload, headers=headers)
                             response.raise_for_status()
                             return response.json()
-                    except (httpx.RequestError, httpx.HTTPStatusError) as e:
-                        last_error = e
-                        if attempt < self.max_retries:
-                            sleep_time = 1 * (2 ** attempt)
-                            await asyncio.sleep(sleep_time)
-                        else:
-                            break
-                raise RuntimeError(
-                    f"LiteLLM OCR request failed after {self.max_retries} retries. Error: {last_error}"
-                ) from last_error
+                        except (httpx.RequestError, httpx.HTTPStatusError) as e:
+                            last_error = e
+                            # Only retry if it's a transient error and we have retries left
+                            if attempt < self.max_retries and _is_transient_error(e):
+                                sleep_time = 1 * (2 ** attempt)
+                                await asyncio.sleep(sleep_time)
+                            else:
+                                break
+
+                # Build detailed error message
+                error_msg = f"LiteLLM OCR request failed after {self.max_retries} retries."
+                if isinstance(last_error, httpx.HTTPStatusError):
+                    status = last_error.response.status_code
+                    body = last_error.response.text[:500]  # Limit body length
+                    error_msg += f" Status: {status}, Response: {body}"
+                else:
+                    error_msg += f" Error: {last_error}"
+                
+                raise RuntimeError(error_msg) from last_error
 
             return _async_request()
 

@@ -64,6 +64,28 @@ class TestLiteLLMOCRLoaderValidation:
                 url_path="https://example.com/doc.pdf"
             )
 
+    def test_invalid_timeout_raises_error(self) -> None:
+        """Test that non-positive timeout raises ValueError."""
+        with pytest.raises(ValueError, match="timeout must be positive"):
+            LiteLLMOCRLoader(
+                url_path="https://example.com/doc.pdf",
+                timeout=0
+            )
+        
+        with pytest.raises(ValueError, match="timeout must be positive"):
+            LiteLLMOCRLoader(
+                url_path="https://example.com/doc.pdf",
+                timeout=-1.0
+            )
+
+    def test_invalid_max_retries_raises_error(self) -> None:
+        """Test that negative max_retries raises ValueError."""
+        with pytest.raises(ValueError, match="max_retries must be non-negative"):
+            LiteLLMOCRLoader(
+                url_path="https://example.com/doc.pdf",
+                max_retries=-1
+            )
+
 
 class TestLiteLLMOCRLoaderDocumentPreparation:
     """Test document payload preparation."""
@@ -416,10 +438,14 @@ class TestLiteLLMOCRLoaderResilience:
         mock_client = MagicMock()
         mock_client.__enter__.return_value = mock_client
         
+        # Create a proper mock response for HTTPStatusError (transient 500 error)
+        mock_error_response = MagicMock()
+        mock_error_response.status_code = 500
+        
         # Side effect: Raise error twice, then return response
         mock_client.post.side_effect = [
             httpx.RequestError("Fail 1"),
-            httpx.HTTPStatusError("Fail 2", request=MagicMock(), response=MagicMock()),
+            httpx.HTTPStatusError("Fail 2", request=MagicMock(), response=mock_error_response),
             mock_response
         ]
         mock_client_class.return_value = mock_client
@@ -462,3 +488,81 @@ class TestLiteLLMOCRLoaderResilience:
 
         # Called 3 times (1 initial + 2 retries)
         assert mock_client.post.call_count == 3
+
+    @patch("httpx.Client")
+    @patch("time.sleep")
+    def test_non_transient_errors_not_retried(
+        self,
+        mock_sleep: MagicMock,
+        mock_client_class: MagicMock
+    ) -> None:
+        """Test that non-transient HTTP errors (like 404) are not retried."""
+        import httpx
+
+        # Setup mock to fail with non-transient error (404)
+        mock_error_response = MagicMock()
+        mock_error_response.status_code = 404
+        mock_error_response.text = "Not Found"
+        
+        mock_client = MagicMock()
+        mock_client.__enter__.return_value = mock_client
+        mock_client.post.side_effect = httpx.HTTPStatusError(
+            "Not Found",
+            request=MagicMock(),
+            response=mock_error_response
+        )
+        mock_client_class.return_value = mock_client
+
+        loader = LiteLLMOCRLoader(
+            url_path="https://example.com/doc.pdf",
+            max_retries=3
+        )
+
+        with pytest.raises(RuntimeError, match="Status: 404"):
+            loader.load()
+
+        # Should only be called once (no retries for 404)
+        assert mock_client.post.call_count == 1
+        # Should not sleep since no retries
+        assert mock_sleep.call_count == 0
+
+    @patch("httpx.Client")
+    @patch("time.sleep")
+    def test_transient_errors_are_retried(
+        self,
+        mock_sleep: MagicMock,
+        mock_client_class: MagicMock
+    ) -> None:
+        """Test that transient HTTP errors (429, 500) are retried."""
+        import httpx
+
+        # Setup mock to fail with transient errors
+        mock_error_response_429 = MagicMock()
+        mock_error_response_429.status_code = 429
+        mock_error_response_429.text = "Too Many Requests"
+        
+        mock_error_response_503 = MagicMock()
+        mock_error_response_503.status_code = 503
+        mock_error_response_503.text = "Service Unavailable"
+        
+        mock_client = MagicMock()
+        mock_client.__enter__.return_value = mock_client
+        mock_client.post.side_effect = [
+            httpx.HTTPStatusError("Too Many", request=MagicMock(), response=mock_error_response_429),
+            httpx.HTTPStatusError("Unavailable", request=MagicMock(), response=mock_error_response_503),
+            httpx.HTTPStatusError("Still Unavailable", request=MagicMock(), response=mock_error_response_503),
+        ]
+        mock_client_class.return_value = mock_client
+
+        loader = LiteLLMOCRLoader(
+            url_path="https://example.com/doc.pdf",
+            max_retries=2
+        )
+
+        with pytest.raises(RuntimeError, match="Status: 503"):
+            loader.load()
+
+        # Should be called 3 times (1 initial + 2 retries)
+        assert mock_client.post.call_count == 3
+        # Should sleep twice
+        assert mock_sleep.call_count == 2
