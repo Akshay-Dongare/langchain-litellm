@@ -75,6 +75,8 @@ class LiteLLMOCRLoader(BaseLoader):
         base64_content: Optional[str] = None,
         bytes_content: Optional[bytes] = None,
         mode: Literal["single", "page"] = "single",
+        timeout: float = 300.0,
+        max_retries: int = 3,
     ) -> None:
         """Initialize the LiteLLM OCR loader."""
         # Validate input sources
@@ -112,6 +114,8 @@ class LiteLLMOCRLoader(BaseLoader):
         self.base64_content = base64_content
         self.bytes_content = bytes_content
         self.mode = mode
+        self.timeout = timeout
+        self.max_retries = max_retries
 
     def _prepare_document_payload(self) -> Dict[str, Any]:
         """Prepare the document payload for the OCR request.
@@ -182,69 +186,60 @@ class LiteLLMOCRLoader(BaseLoader):
         document_payload: Dict[str, Any],
         sync: bool = True
     ) -> Dict[str, Any]:
-        """Make synchronous or asynchronous OCR request to LiteLLM proxy.
-
-        Args:
-            document_payload: Document payload dict.
-            sync: Whether to make a synchronous request (True) or return
-                an awaitable (False).
-
-        Returns:
-            Response JSON as a dict.
-        """
+        """Make synchronous or asynchronous OCR request with retries."""
         try:
             import httpx
         except ImportError:
-            raise ImportError(
-                "httpx is required for LiteLLMOCRLoader. "
-                "Install it with: pip install httpx"
-            )
+            raise ImportError("httpx is required. Install it with: pip install httpx")
+
+        import asyncio
+        import time
 
         url = f"{self.proxy_base_url}/ocr"
         headers = {"Content-Type": "application/json"}
-
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
-        payload = {
-            "model": self.model,
-            "document": document_payload
-        }
+        payload = {"model": self.model, "document": document_payload}
 
         if sync:
-            with httpx.Client(timeout=300.0) as client:
+            last_error = None
+            for attempt in range(self.max_retries + 1):
                 try:
-                    response = client.post(url, json=payload, headers=headers)
-                    response.raise_for_status()
-                    return response.json()
-                except httpx.HTTPStatusError as e:
-                    raise RuntimeError(
-                        f"HTTP error from LiteLLM proxy: {e.response.status_code} "
-                        f"{e.response.text}"
-                    ) from e
-                except httpx.RequestError as e:
-                    raise RuntimeError(
-                        f"Failed to connect to LiteLLM proxy at {url}. "
-                        f"Is the proxy running? Error: {e}"
-                    ) from e
-        else:
-            # Return a coroutine for async
-            async def _async_request() -> Dict[str, Any]:
-                async with httpx.AsyncClient(timeout=300.0) as client:
-                    try:
-                        response = await client.post(url, json=payload, headers=headers)
+                    with httpx.Client(timeout=self.timeout) as client:
+                        response = client.post(url, json=payload, headers=headers)
                         response.raise_for_status()
                         return response.json()
-                    except httpx.HTTPStatusError as e:
-                        raise RuntimeError(
-                            f"HTTP error from LiteLLM proxy: {e.response.status_code} "
-                            f"{e.response.text}"
-                        ) from e
-                    except httpx.RequestError as e:
-                        raise RuntimeError(
-                            f"Failed to connect to LiteLLM proxy at {url}. "
-                            f"Is the proxy running? Error: {e}"
-                        ) from e
+                except (httpx.RequestError, httpx.HTTPStatusError) as e:
+                    last_error = e
+                    if attempt < self.max_retries:
+                        sleep_time = 1 * (2 ** attempt)  # Exponential backoff
+                        time.sleep(sleep_time)
+                    else:
+                        break
+            raise RuntimeError(
+                f"LiteLLM OCR request failed after {self.max_retries} retries. Error: {last_error}"
+            ) from last_error
+
+        else:
+            async def _async_request() -> Dict[str, Any]:
+                last_error = None
+                for attempt in range(self.max_retries + 1):
+                    try:
+                        async with httpx.AsyncClient(timeout=self.timeout) as client:
+                            response = await client.post(url, json=payload, headers=headers)
+                            response.raise_for_status()
+                            return response.json()
+                    except (httpx.RequestError, httpx.HTTPStatusError) as e:
+                        last_error = e
+                        if attempt < self.max_retries:
+                            sleep_time = 1 * (2 ** attempt)
+                            await asyncio.sleep(sleep_time)
+                        else:
+                            break
+                raise RuntimeError(
+                    f"LiteLLM OCR request failed after {self.max_retries} retries. Error: {last_error}"
+                ) from last_error
 
             return _async_request()
 
