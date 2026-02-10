@@ -223,6 +223,7 @@ class LiteLLMOCRLoader(BaseLoader):
 
         if sync:
             last_error = None
+            attempt = 0
             with httpx.Client(timeout=self.timeout) as client:
                 for attempt in range(self.max_retries + 1):
                     try:
@@ -257,6 +258,7 @@ class LiteLLMOCRLoader(BaseLoader):
         else:
             async def _async_request() -> Dict[str, Any]:
                 last_error = None
+                attempt = 0
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
                     for attempt in range(self.max_retries + 1):
                         try:
