@@ -532,3 +532,11 @@ class TestLiteLLMOCRLoaderTimeoutAndRetry:
             loader.load()
 
         assert mock_client.post.call_count == 1
+
+    def test_max_retries_zero_raises_error(self) -> None:
+        """Test that max_retries=0 raises ValueError."""
+        with pytest.raises(ValueError, match="max_retries must be at least 1"):
+            LiteLLMOCRLoader(
+                url_path="https://example.com/doc.pdf",
+                max_retries=0,
+            )

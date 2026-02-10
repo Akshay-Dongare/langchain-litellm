@@ -113,6 +113,12 @@ class LiteLLMOCRLoader(BaseLoader):
                 f"got: {proxy_base_url}"
             )
 
+        # Validate max_retries
+        if max_retries < 1:
+            raise ValueError(
+                f"max_retries must be at least 1, got: {max_retries}"
+            )
+
         self.proxy_base_url = proxy_base_url.rstrip("/")
         self.api_key = api_key
         self.model = model
