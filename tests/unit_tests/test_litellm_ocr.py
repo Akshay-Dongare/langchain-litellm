@@ -301,8 +301,8 @@ class TestLiteLLMOCRLoaderLoad:
             max_retries=0
         )
 
-        # Update match string to new error format
-        with pytest.raises(RuntimeError, match="LiteLLM OCR request failed"):
+        # HTTP errors should contain "LiteLLM OCR request" and status code
+        with pytest.raises(RuntimeError, match="LiteLLM OCR request.*Status: 500"):
             loader.load()
 
     @patch("httpx.Client")
@@ -323,8 +323,8 @@ class TestLiteLLMOCRLoaderLoad:
             max_retries=0
         )
 
-        # Update match string to new error format
-        with pytest.raises(RuntimeError, match="LiteLLM OCR request failed"):
+        # Connection errors should contain "Failed to connect"
+        with pytest.raises(RuntimeError, match="Failed to connect"):
             loader.load()
 
 
@@ -483,7 +483,7 @@ class TestLiteLLMOCRLoaderResilience:
             max_retries=2
         )
 
-        with pytest.raises(RuntimeError, match="failed after 3 attempts"):
+        with pytest.raises(RuntimeError, match="3 attempts made"):
             loader.load()
 
         # Called 3 times (1 initial + 2 retries)

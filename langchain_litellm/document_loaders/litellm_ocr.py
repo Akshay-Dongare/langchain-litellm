@@ -241,16 +241,28 @@ class LiteLLMOCRLoader(BaseLoader):
 
             # Build detailed error message
             attempts = attempt + 1
-            if attempts == 1:
-                error_msg = "LiteLLM OCR request failed after 1 attempt."
-            else:
-                error_msg = f"LiteLLM OCR request failed after {attempts} attempts."
             
-            if isinstance(last_error, httpx.HTTPStatusError):
+            if isinstance(last_error, httpx.RequestError):
+                # Connection error - preserve "Failed to connect" for backward compatibility
+                error_msg = f"Failed to connect to LiteLLM proxy at {url}. Is the proxy running?"
+                if attempts > 1:
+                    error_msg += f" ({attempts} attempts made)"
+                error_msg += f" Error: {last_error}"
+            elif isinstance(last_error, httpx.HTTPStatusError):
+                # HTTP status error
                 status = last_error.response.status_code
                 body = last_error.response.text[:500]  # Limit body length
+                if attempts == 1:
+                    error_msg = f"LiteLLM OCR request to {url} failed after 1 attempt."
+                else:
+                    error_msg = f"LiteLLM OCR request to {url} failed after {attempts} attempts."
                 error_msg += f" Status: {status}, Response: {body}"
             else:
+                # Fallback for any other error type
+                if attempts == 1:
+                    error_msg = f"LiteLLM OCR request to {url} failed after 1 attempt."
+                else:
+                    error_msg = f"LiteLLM OCR request to {url} failed after {attempts} attempts."
                 error_msg += f" Error: {last_error}"
             
             raise RuntimeError(error_msg) from last_error
@@ -276,16 +288,28 @@ class LiteLLMOCRLoader(BaseLoader):
 
                 # Build detailed error message
                 attempts = attempt + 1
-                if attempts == 1:
-                    error_msg = "LiteLLM OCR request failed after 1 attempt."
-                else:
-                    error_msg = f"LiteLLM OCR request failed after {attempts} attempts."
                 
-                if isinstance(last_error, httpx.HTTPStatusError):
+                if isinstance(last_error, httpx.RequestError):
+                    # Connection error - preserve "Failed to connect" for backward compatibility
+                    error_msg = f"Failed to connect to LiteLLM proxy at {url}. Is the proxy running?"
+                    if attempts > 1:
+                        error_msg += f" ({attempts} attempts made)"
+                    error_msg += f" Error: {last_error}"
+                elif isinstance(last_error, httpx.HTTPStatusError):
+                    # HTTP status error
                     status = last_error.response.status_code
                     body = last_error.response.text[:500]  # Limit body length
+                    if attempts == 1:
+                        error_msg = f"LiteLLM OCR request to {url} failed after 1 attempt."
+                    else:
+                        error_msg = f"LiteLLM OCR request to {url} failed after {attempts} attempts."
                     error_msg += f" Status: {status}, Response: {body}"
                 else:
+                    # Fallback for any other error type
+                    if attempts == 1:
+                        error_msg = f"LiteLLM OCR request to {url} failed after 1 attempt."
+                    else:
+                        error_msg = f"LiteLLM OCR request to {url} failed after {attempts} attempts."
                     error_msg += f" Error: {last_error}"
                 
                 raise RuntimeError(error_msg) from last_error
