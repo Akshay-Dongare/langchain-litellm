@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
+import httpx
 import mimetypes
-from contextlib import contextmanager
+import time
 from typing import Any, Dict, Iterator, List, Literal, Optional
 from pathlib import Path
 
@@ -197,14 +199,6 @@ class LiteLLMOCRLoader(BaseLoader):
         sync: bool = True
     ) -> Dict[str, Any]:
         """Make synchronous or asynchronous OCR request with retries."""
-        try:
-            import httpx
-        except ImportError:
-            raise ImportError("httpx is required. Install it with: pip install httpx")
-
-        import asyncio
-        import time
-
         url = f"{self.proxy_base_url}/ocr"
         headers = {"Content-Type": "application/json"}
         if self.api_key:
