@@ -5,18 +5,18 @@ build-backend = "poetry_dynamic_versioning.backend"
 [tool.poetry]
 name = "langchain-litellm"
 version = "0.0.0"
-description = "An integration package connecting Litellm and LangChain"
-authors = ["Akshay Dongare"]
+description = "An integration package connecting LiteLLM and LangChain"
+license = { text = "MIT" }
 readme = "README.md"
-repository = "https://github.com/langchain-ai/langchain/blob/master/docs/docs/integrations/chat/litellm.ipynb"
-license = "MIT"
+authors = ["Akshay Dongare"]
+repository = "https://github.com/langchain-ai/langchain-litellm"
 
 [tool.mypy]
 disallow_untyped_defs = "True"
 
 [tool.poetry.urls]
-"Source Code" = "https://github.com/Akshay-Dongare/langchain-litellm"
-"Release Notes" = "https://github.com/langchain-ai/langchain/blob/master/docs/docs/integrations/providers/litellm.mdx"
+"Source Code" = "https://github.com/langchain-ai/langchain-litellm"
+"Release Notes" = "https://github.com/langchain-ai/langchain-litellm/releases"
 
 [tool.poetry.dependencies]
 python = ">=3.10,<4.0"

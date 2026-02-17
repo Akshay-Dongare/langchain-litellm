@@ -1,4 +1,5 @@
-<!-- START BADGE TABLE -->
+# langchain-litellm
+
 <table>
 <thead>
 <tr>
@@ -44,29 +45,16 @@
 </tr>
 </tbody>
 </table>
-<!-- END BADGE TABLE -->
 
-# [langchain-litellm](https://pypi.org/project/langchain-litellm/)
+## 🤔 What is this?
 
-This package contains the [LangChain](https://github.com/langchain-ai/langchain) integration with LiteLLM. [LiteLLM](https://github.com/BerriAI/litellm) is a library that simplifies calling Anthropic, Azure, Huggingface, Replicate, etc.
+This package contains the LangChain integration with LiteLLM. [LiteLLM](https://github.com/BerriAI/litellm) is a library that simplifies calling Anthropic, Azure, Huggingface, Replicate, etc.
 
-## Installation and setup
+## 📖 Documentation
 
-```bash
-pip install -U langchain-litellm
-```
+For conceptual guides, tutorials, and examples on using these classes, see the [LangChain Docs](https://docs.langchain.com/oss/python/integrations/providers/litellm).
 
-## Chat Models
-```python
-from langchain_litellm import ChatLiteLLM
-```
-
-```python
-from langchain_litellm import ChatLiteLLMRouter
-```
-See a [usage example](https://github.com/Akshay-Dongare/langchain-litellm/blob/main/docs/litellm.ipynb)
-
-## Advanced Features
+### Advanced Features
 
 <details>
 <summary><strong>Vertex AI Grounding (Google Search)</strong></summary>
@@ -117,4 +105,15 @@ for chunk in stream:
     if "provider_specific_fields" in chunk.additional_kwargs:
         print("\n[Metadata Found]:", chunk.additional_kwargs["provider_specific_fields"])
 ```
+
 </details>
+
+## 📕 Releases & Versioning
+
+See our [Releases](https://docs.langchain.com/oss/python/release-policy) and [Versioning](https://docs.langchain.com/oss/python/versioning) policies.
+
+## 💁 Contributing
+
+As an open-source project in a rapidly developing field, we are extremely open to contributions, whether it be in the form of a new feature, improved infrastructure, or better documentation.
+
+For detailed information on how to contribute, see the [Contributing Guide](https://docs.langchain.com/oss/python/contributing/overview).
