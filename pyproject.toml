@@ -23,7 +23,7 @@ python = ">=3.10,<4.0"
 langchain-core = ">0.3.15,<2.0.0"
 litellm = "^1.77.2"
 httpx = "^0.28.1"
-cryptography = ">=46.0.5"
+cryptography = ">=46.0.5,<47.0.0"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "T201"]
@@ -78,7 +78,7 @@ syrupy = ">=4.0.2,<5.0.0"
 requests-mock = ">=1.11.0,<2.0.0"
 pytest-xdist = ">=3.6.1,<4.0.0"
 blockbuster = ">=1.5.18,<1.6"
-cffi = {markers = "python_version >= \"3.10\"", version = "^1.17.1"}
+cffi = { markers = "python_version >= \"3.10\"", version = ">=2.0.0,<3.0.0" }
 langchain-core = "^1.0.0"
 langchain = "^1.0.0"
 toml = ">=0.10.2"
@@ -103,6 +103,7 @@ mypy-protobuf = ">=3.0.0,<4.0.0"
 langchain-core = "^1.0.0"
 langchain-text-splitters = "^0.3.7"
 langchain = "^1.0.0"
+cffi = ">=2.0.0,<3.0.0"
 
 [tool.poetry-dynamic-versioning]
 enable = true
