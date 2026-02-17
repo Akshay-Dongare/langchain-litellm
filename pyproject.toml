@@ -6,7 +6,7 @@ build-backend = "poetry_dynamic_versioning.backend"
 name = "langchain-litellm"
 version = "0.0.0"
 description = "An integration package connecting LiteLLM and LangChain"
-license = { text = "MIT" }
+license = "MIT"
 readme = "README.md"
 authors = ["Akshay Dongare"]
 repository = "https://github.com/langchain-ai/langchain-litellm"
@@ -105,3 +105,4 @@ langchain = "^1.0.0"
 
 [tool.poetry-dynamic-versioning]
 enable = true
+
