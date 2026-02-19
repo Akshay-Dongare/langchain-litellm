@@ -1,29 +1,89 @@
 [build-system]
-requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
-build-backend = "poetry_dynamic_versioning.backend"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.poetry]
+[project]
 name = "langchain-litellm"
-version = "0.0.0"
+version = "0.5.1"
 description = "An integration package connecting LiteLLM and LangChain"
-license = "MIT"
+authors = [{name = "Akshay Dongare"}]
+license = {text = "MIT"}
 readme = "README.md"
-authors = ["Akshay Dongare"]
-repository = "https://github.com/langchain-ai/langchain-litellm"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.10,<4.0"
+dependencies = [
+    "langchain-core>0.3.15,<2.0.0",
+    "litellm>=1.77.2,<2.0.0",
+    "httpx>=0.28.1,<0.29.0",
+    "cryptography>=46.0.5,<47.0.0",
+]
+
+[project.urls]
+"Source Code" = "https://github.com/langchain-ai/langchain-litellm"
+"Release Notes" = "https://github.com/langchain-ai/langchain-litellm/releases"
+Repository = "https://github.com/langchain-ai/langchain-litellm"
+
+[dependency-groups]
+test = [
+    "pytest>=7.4.4,<8.0.0",
+    "pytest-asyncio>=0.20.3,<1.0.0",
+    "pytest-socket>=0.6.0,<1.0.0",
+    "pytest-watcher>=0.2.6,<1.0.0",
+    "langchain-tests>=1.0.0,<2.0.0",
+    "pytest-cov>=4.1.0,<5.0.0",
+    "pytest-dotenv>=0.5.2,<1.0.0",
+    "duckdb-engine>=0.13.6,<1.0.0",
+    "freezegun>=1.2.2,<2.0.0",
+    "responses>=0.22.0,<1.0.0",
+    "lark>=1.1.5,<2.0.0",
+    "pandas>=2.0.0,<3.0.0",
+    "pytest-mock>=3.10.0,<4.0.0",
+    "syrupy>=4.0.2,<5.0.0",
+    "requests-mock>=1.11.0,<2.0.0",
+    "pytest-xdist>=3.6.1,<4.0.0",
+    "blockbuster>=1.5.18,<1.6",
+    "cffi>=2.0.0,<3.0.0; python_version >= '3.10'",
+    "langchain-core>=1.0.0,<2.0.0",
+    "langchain>=1.0.0,<2.0.0",
+    "toml>=0.10.2",
+]
+codespell = [
+    "codespell>=2.2.6,<3.0.0",
+]
+lint = [
+    "ruff>=0.5.0,<0.6.0",
+]
+dev = [
+    "ipykernel>=6.29.5,<7.0.0",
+    "python-dotenv>=1.2.1,<2.0.0",
+]
+typing = [
+    "mypy>=1.12,<2.0",
+    "types-pyyaml>=6.0.12.2,<7.0.0.0",
+    "types-requests>=2.28.11.5,<3.0.0.0",
+    "types-toml>=0.10.8.1,<1.0.0.0",
+    "types-pytz>=2023.3.0.0,<2024.0.0.0",
+    "types-chardet>=5.0.4.6,<6.0.0.0",
+    "types-redis>=4.3.21.6,<5.0.0.0",
+    "mypy-protobuf>=3.0.0,<4.0.0",
+    "langchain-core>=1.0.0,<2.0.0",
+    "langchain-text-splitters>=0.3.7,<0.4.0",
+    "langchain>=1.0.0,<2.0.0",
+    "cffi>=2.0.0,<3.0.0",
+]
+test_integration = []
 
 [tool.mypy]
 disallow_untyped_defs = "True"
-
-[tool.poetry.urls]
-"Source Code" = "https://github.com/langchain-ai/langchain-litellm"
-"Release Notes" = "https://github.com/langchain-ai/langchain-litellm/releases"
-
-[tool.poetry.dependencies]
-python = ">=3.10,<4.0"
-langchain-core = ">0.3.15,<2.0.0"
-litellm = "^1.77.2"
-httpx = "^0.28.1"
-cryptography = ">=46.0.5,<47.0.0"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "T201"]
@@ -40,70 +100,3 @@ markers = [
     "compile: mark placeholder test used to compile integration tests without running them",
 ]
 asyncio_mode = "auto"
-
-[tool.poetry.group.test]
-optional = true
-
-[tool.poetry.group.codespell]
-optional = true
-
-[tool.poetry.group.test_integration]
-optional = true
-
-[tool.poetry.group.lint]
-optional = true
-
-[tool.poetry.group.dev]
-optional = true
-
-[tool.poetry.group.dev.dependencies]
-ipykernel = "^6.29.5"
-python-dotenv = "^1.2.1"
-
-[tool.poetry.group.test.dependencies]
-pytest = ">=7.4.4,<8.0.0"
-pytest-asyncio = ">=0.20.3,<1.0.0"
-pytest-socket = ">=0.6.0,<1.0.0"
-pytest-watcher = ">=0.2.6,<1.0.0"
-langchain-tests = "^1.0.0"
-pytest-cov = ">=4.1.0,<5.0.0"
-pytest-dotenv = ">=0.5.2,<1.0.0"
-duckdb-engine = ">=0.13.6,<1.0.0"
-freezegun = ">=1.2.2,<2.0.0"
-responses = ">=0.22.0,<1.0.0"
-lark = ">=1.1.5,<2.0.0"
-pandas = ">=2.0.0,<3.0.0"
-pytest-mock = ">=3.10.0,<4.0.0"
-syrupy = ">=4.0.2,<5.0.0"
-requests-mock = ">=1.11.0,<2.0.0"
-pytest-xdist = ">=3.6.1,<4.0.0"
-blockbuster = ">=1.5.18,<1.6"
-cffi = { markers = "python_version >= \"3.10\"", version = ">=2.0.0,<3.0.0" }
-langchain-core = "^1.0.0"
-langchain = "^1.0.0"
-toml = ">=0.10.2"
-
-[tool.poetry.group.codespell.dependencies]
-codespell = "^2.2.6"
-
-[tool.poetry.group.test_integration.dependencies]
-
-[tool.poetry.group.lint.dependencies]
-ruff = "^0.5"
-
-[tool.poetry.group.typing.dependencies]
-mypy = ">=1.12,<2.0"
-types-pyyaml = ">=6.0.12.2,<7.0.0.0"
-types-requests = ">=2.28.11.5,<3.0.0.0"
-types-toml = ">=0.10.8.1,<1.0.0.0"
-types-pytz = ">=2023.3.0.0,<2024.0.0.0"
-types-chardet = ">=5.0.4.6,<6.0.0.0"
-types-redis = ">=4.3.21.6,<5.0.0.0"
-mypy-protobuf = ">=3.0.0,<4.0.0"
-langchain-core = "^1.0.0"
-langchain-text-splitters = "^0.3.7"
-langchain = "^1.0.0"
-cffi = ">=2.0.0,<3.0.0"
-
-[tool.poetry-dynamic-versioning]
-enable = true
