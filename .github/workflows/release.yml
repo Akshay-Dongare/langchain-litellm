@@ -14,26 +14,31 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
         with:
-          release-type: python
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
 
   pypi-publish:
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
-    
-    # REQUIRED FOR PYPI TRUSTED PUBLISHING
+    environment: pypi
+
+    # Required for PyPI Trusted Publishing (OIDC-based, tokenless auth).
+    # See: https://docs.pypi.org/trusted-publishers/
     permissions:
-      id-token: write  # Allows GitHub to request the OIDC token from PyPI
+      id-token: write  # Allows the workflow to mint an OIDC token for PyPI trusted publishing
       contents: read   # Allows actions/checkout to read the code
 
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: ${{ needs.release-please.outputs.tag_name }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -44,9 +49,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version-file: "pyproject.toml"
+          python-version: "3.10"
 
-      - name: Build and publish
-        run: |
-          uv build
-          uv publish --trusted-publishing always
+      - name: Build package
+        run: uv build
+
+      - name: Verify build artifacts
+        run: ls -la dist/
+
+      - name: Publish to PyPI
+        run: uv publish --trusted-publishing always
