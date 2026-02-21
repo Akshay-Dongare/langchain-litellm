@@ -7,7 +7,11 @@ from langchain_tests.unit_tests import ChatModelUnitTests
 from litellm.types.utils import ChatCompletionDeltaToolCall, Delta, Function
 
 from langchain_litellm.chat_models import ChatLiteLLM
-from langchain_litellm.chat_models.litellm import _convert_delta_to_message_chunk, _convert_dict_to_message
+from langchain_litellm.chat_models.litellm import (
+    _convert_delta_to_message_chunk,
+    _convert_dict_to_message,
+    _inject_reasoning_content_into_content,
+)
 
 
 class TestChatLiteLLMUnit(ChatModelUnitTests):
@@ -155,3 +159,40 @@ class TestChatLiteLLMUnit(ChatModelUnitTests):
         
         assert "provider_specific_fields" in result.llm_output
         assert result.llm_output["provider_specific_fields"]["citations"][0]["source"] == "test"
+
+
+def test_inject_reasoning_content_into_string_content() -> None:
+    result = _inject_reasoning_content_into_content("answer", "hidden chain")
+
+    assert result == [
+        {"type": "thinking", "thinking": "hidden chain"},
+        {"type": "text", "text": "answer"},
+    ]
+
+
+def test_inject_reasoning_content_into_empty_content() -> None:
+    result = _inject_reasoning_content_into_content("", "hidden chain")
+
+    assert result == [{"type": "thinking", "thinking": "hidden chain"}]
+
+
+def test_inject_reasoning_content_prepends_for_list_without_thinking() -> None:
+    content = [{"type": "text", "text": "answer"}]
+
+    result = _inject_reasoning_content_into_content(content, "hidden chain")
+
+    assert result == [
+        {"type": "thinking", "thinking": "hidden chain"},
+        {"type": "text", "text": "answer"},
+    ]
+
+
+def test_inject_reasoning_content_does_not_duplicate_existing_thinking() -> None:
+    content = [
+        {"type": "thinking", "thinking": "already there"},
+        {"type": "text", "text": "answer"},
+    ]
+
+    result = _inject_reasoning_content_into_content(content, "hidden chain")
+
+    assert result == content

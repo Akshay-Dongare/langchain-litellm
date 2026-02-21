@@ -102,6 +102,27 @@ def _create_retry_decorator(
         error_types=errors, max_retries=llm.max_retries, run_manager=run_manager
     )
 
+def _inject_reasoning_content_into_content(
+    content: Any, reasoning_content: str
+) -> List[Dict[str, Any]]:
+    thinking_block = {"type": "thinking", "thinking": reasoning_content}
+    if isinstance(content, list):
+        has_thinking_block = any(
+            isinstance(block, dict)
+            and block.get("type") in ("thinking", "redacted_thinking")
+            for block in content
+        )
+        if has_thinking_block:
+            return content
+        return [thinking_block, *content]
+
+    if not content:
+        return [thinking_block]
+
+    if isinstance(content, str):
+        return [thinking_block, {"type": "text", "text": content}]
+
+    return [thinking_block, content]
 
 def _convert_dict_to_message(_dict: Mapping[str, Any]) -> BaseMessage:
     role = _dict["role"]
@@ -152,6 +173,9 @@ def _convert_dict_to_message(_dict: Mapping[str, Any]) -> BaseMessage:
 
         if _dict.get("reasoning_content"):
             additional_kwargs["reasoning_content"] = _dict["reasoning_content"]
+            content = _inject_reasoning_content_into_content(
+                content, _dict["reasoning_content"]
+            )
         
         # Check standard field first, then fallback to Vertex specific field
         provider_specific_fields = _dict.get("provider_specific_fields")
@@ -205,6 +229,9 @@ def _convert_delta_to_message_chunk(
         additional_kwargs["function_call"] = dict(function_call)
     if reasoning_content:
         additional_kwargs["reasoning_content"] = reasoning_content
+
+    if reasoning_content and (role == "assistant" or default_class == AIMessageChunk):
+        content = _inject_reasoning_content_into_content(content, reasoning_content)
     
     if provider_specific_fields is not None:
         additional_kwargs["provider_specific_fields"] = provider_specific_fields
