@@ -35,9 +35,14 @@ dependencies = [
 ]
 
 [project.urls]
-"Source Code" = "https://github.com/langchain-ai/langchain-litellm"
-"Release Notes" = "https://github.com/langchain-ai/langchain-litellm/releases"
+Homepage = "https://docs.langchain.com/oss/python/integrations/providers/litellm"
+Documentation = "https://docs.langchain.com/oss/python/integrations/chat/litellm"
 Repository = "https://github.com/langchain-ai/langchain-litellm"
+Issues = "https://github.com/langchain-ai/langchain-litellm/issues"
+Changelog = "https://github.com/langchain-ai/langchain-litellm/releases"
+Twitter = "https://x.com/LangChain"
+Slack = "https://www.langchain.com/join-community"
+Reddit = "https://www.reddit.com/r/LangChain/"
 
 [dependency-groups]
 test = [
