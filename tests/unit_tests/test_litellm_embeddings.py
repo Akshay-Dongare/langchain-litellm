@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_tests.unit_tests import EmbeddingsUnitTests
+from pydantic import ValidationError
 
 from langchain_litellm.embeddings import LiteLLMEmbeddings
 from tests.utils import mock_embedding_response
@@ -63,6 +64,26 @@ class TestLiteLLMEmbeddingsParams:
         )
         params = embeddings._get_litellm_params()
         assert params["user"] == "test-user"
+
+    def test_explicit_params_override_model_kwargs(self):
+        """Test that explicit params take precedence over model_kwargs."""
+        embeddings = LiteLLMEmbeddings(
+            model="openai/text-embedding-3-small",
+            api_key="explicit-key",
+            model_kwargs={"api_key": "kwargs-key"},
+        )
+        params = embeddings._get_litellm_params()
+        assert params["api_key"] == "explicit-key"
+
+    def test_encoding_format_rejects_base64(self):
+        """Test that encoding_format='base64' is rejected by validation."""
+        with pytest.raises(ValidationError):
+            LiteLLMEmbeddings(api_key="fake", encoding_format="base64")
+
+    def test_encoding_format_accepts_float(self):
+        """Test that encoding_format='float' is accepted."""
+        embeddings = LiteLLMEmbeddings(api_key="fake", encoding_format="float")
+        assert embeddings.encoding_format == "float"
 
     @patch("litellm.embedding")
     def test_embed_documents(self, mock_embedding):
@@ -134,6 +155,19 @@ class TestLiteLLMEmbeddingsParams:
         call_kwargs = mock_aembedding.call_args[1]
         assert call_kwargs["input"] == ["hello"]
         assert result == [0.1, 0.2, 0.3]
+
+    def test_embed_documents_empty_list(self):
+        """Test that embed_documents returns [] for empty input without API call."""
+        embeddings = LiteLLMEmbeddings(api_key="fake")
+        result = embeddings.embed_documents([])
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_aembed_documents_empty_list(self):
+        """Test that aembed_documents returns [] for empty input without API call."""
+        embeddings = LiteLLMEmbeddings(api_key="fake")
+        result = await embeddings.aembed_documents([])
+        assert result == []
 
     @patch("litellm.embedding")
     def test_embed_documents_with_input_type(self, mock_embedding):

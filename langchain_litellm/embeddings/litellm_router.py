@@ -56,12 +56,12 @@ class LiteLLMEmbeddingsRouter(LiteLLMEmbeddings):
     ) -> Dict[str, Any]:
         """Build parameter dict for router.embedding(), excluding None values."""
         params: Dict[str, Any] = {
+            **self.model_kwargs,
             "model": self.model,
             "timeout": self.request_timeout,
             "dimensions": self.dimensions,
             "encoding_format": self.encoding_format,
             "input_type": input_type,
-            **self.model_kwargs,
         }
         return {k: v for k, v in params.items() if v is not None}
 
@@ -74,6 +74,9 @@ class LiteLLMEmbeddingsRouter(LiteLLMEmbeddings):
         Returns:
             List of embeddings, one for each text.
         """
+        if not texts:
+            return []
+
         params = self._get_router_params(input_type=self.document_input_type)
         response = self.router.embedding(input=texts, **params)
         return [item["embedding"] for item in response.data]
@@ -100,6 +103,9 @@ class LiteLLMEmbeddingsRouter(LiteLLMEmbeddings):
         Returns:
             List of embeddings, one for each text.
         """
+        if not texts:
+            return []
+
         params = self._get_router_params(input_type=self.document_input_type)
         response = await self.router.aembedding(input=texts, **params)
         return [item["embedding"] for item in response.data]

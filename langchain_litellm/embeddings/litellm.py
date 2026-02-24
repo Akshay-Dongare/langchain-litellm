@@ -3,12 +3,26 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
 from langchain_core.embeddings import Embeddings
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 logger = logging.getLogger(__name__)
+
+
+def _create_retry_decorator(max_retries: int) -> Callable[[Any], Any]:
+    """Return a tenacity retry decorator for transient litellm errors."""
+    import litellm
+    from langchain_core.language_models.llms import create_base_retry_decorator
+
+    errors = [
+        litellm.Timeout,
+        litellm.APIError,
+        litellm.APIConnectionError,
+        litellm.RateLimitError,
+    ]
+    return create_base_retry_decorator(error_types=errors, max_retries=max_retries)
 
 
 class LiteLLMEmbeddings(BaseModel, Embeddings):
@@ -66,7 +80,8 @@ class LiteLLMEmbeddings(BaseModel, Embeddings):
     """Timeout for API requests."""
 
     max_retries: int = 1
-    """Maximum number of retries on failure."""
+    """Maximum number of retries on transient errors (Timeout, APIError,
+    APIConnectionError, RateLimitError)."""
 
     extra_headers: Optional[Dict[str, str]] = None
     """Extra headers to include in the request."""
@@ -77,8 +92,9 @@ class LiteLLMEmbeddings(BaseModel, Embeddings):
     dimensions: Optional[int] = None
     """Output embedding dimensions (if supported by the model)."""
 
-    encoding_format: Optional[str] = None
-    """Encoding format for the embeddings (e.g. 'float', 'base64')."""
+    encoding_format: Optional[Literal["float"]] = None
+    """Encoding format for the embeddings. Only 'float' is supported;
+    'base64' is not supported as it would return strings instead of floats."""
 
     document_input_type: Optional[str] = None
     """Input type to send when embedding documents (e.g. 'search_document'
@@ -95,6 +111,7 @@ class LiteLLMEmbeddings(BaseModel, Embeddings):
     ) -> Dict[str, Any]:
         """Build parameter dict for litellm.embedding(), excluding None values."""
         params: Dict[str, Any] = {
+            **self.model_kwargs,
             "model": self.model,
             "api_key": self.api_key,
             "api_base": self.api_base,
@@ -107,9 +124,32 @@ class LiteLLMEmbeddings(BaseModel, Embeddings):
             "dimensions": self.dimensions,
             "encoding_format": self.encoding_format,
             "input_type": input_type,
-            **self.model_kwargs,
         }
         return {k: v for k, v in params.items() if v is not None}
+
+    def _embedding_with_retry(self, **kwargs: Any) -> Any:
+        """Call litellm.embedding with retry on transient errors."""
+        import litellm
+
+        retry_decorator = _create_retry_decorator(self.max_retries)
+
+        @retry_decorator
+        def _embed() -> Any:
+            return litellm.embedding(**kwargs)
+
+        return _embed()
+
+    async def _aembedding_with_retry(self, **kwargs: Any) -> Any:
+        """Call litellm.aembedding with retry on transient errors."""
+        import litellm
+
+        retry_decorator = _create_retry_decorator(self.max_retries)
+
+        @retry_decorator
+        async def _aembed() -> Any:
+            return await litellm.aembedding(**kwargs)
+
+        return await _aembed()
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """Embed a list of document texts.
@@ -120,10 +160,11 @@ class LiteLLMEmbeddings(BaseModel, Embeddings):
         Returns:
             List of embeddings, one for each text.
         """
-        import litellm
+        if not texts:
+            return []
 
         params = self._get_litellm_params(input_type=self.document_input_type)
-        response = litellm.embedding(input=texts, **params)
+        response = self._embedding_with_retry(input=texts, **params)
         return [item["embedding"] for item in response.data]
 
     def embed_query(self, text: str) -> List[float]:
@@ -135,10 +176,8 @@ class LiteLLMEmbeddings(BaseModel, Embeddings):
         Returns:
             Embedding for the text.
         """
-        import litellm
-
         params = self._get_litellm_params(input_type=self.query_input_type)
-        response = litellm.embedding(input=[text], **params)
+        response = self._embedding_with_retry(input=[text], **params)
         return response.data[0]["embedding"]
 
     async def aembed_documents(self, texts: List[str]) -> List[List[float]]:
@@ -150,10 +189,11 @@ class LiteLLMEmbeddings(BaseModel, Embeddings):
         Returns:
             List of embeddings, one for each text.
         """
-        import litellm
+        if not texts:
+            return []
 
         params = self._get_litellm_params(input_type=self.document_input_type)
-        response = await litellm.aembedding(input=texts, **params)
+        response = await self._aembedding_with_retry(input=texts, **params)
         return [item["embedding"] for item in response.data]
 
     async def aembed_query(self, text: str) -> List[float]:
@@ -165,8 +205,6 @@ class LiteLLMEmbeddings(BaseModel, Embeddings):
         Returns:
             Embedding for the text.
         """
-        import litellm
-
         params = self._get_litellm_params(input_type=self.query_input_type)
-        response = await litellm.aembedding(input=[text], **params)
+        response = await self._aembedding_with_retry(input=[text], **params)
         return response.data[0]["embedding"]
