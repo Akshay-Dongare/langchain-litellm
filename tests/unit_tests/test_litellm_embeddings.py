@@ -1,11 +1,13 @@
 """Unit tests for LiteLLMEmbeddings."""
 
 from typing import Type
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from langchain_tests.unit_tests import EmbeddingsUnitTests
 
 from langchain_litellm.embeddings import LiteLLMEmbeddings
+from tests.utils import mock_embedding_response
 
 
 class TestLiteLLMEmbeddingsUnit(EmbeddingsUnitTests):
@@ -19,15 +21,6 @@ class TestLiteLLMEmbeddingsUnit(EmbeddingsUnitTests):
             "model": "openai/text-embedding-3-small",
             "api_key": "fake-key",
         }
-
-
-def _mock_embedding_response(texts):
-    """Create a mock litellm embedding response."""
-    mock_response = MagicMock()
-    mock_response.data = [
-        {"embedding": [0.1, 0.2, 0.3], "index": i} for i in range(len(texts))
-    ]
-    return mock_response
 
 
 class TestLiteLLMEmbeddingsParams:
@@ -74,7 +67,7 @@ class TestLiteLLMEmbeddingsParams:
     @patch("litellm.embedding")
     def test_embed_documents(self, mock_embedding):
         """Test embed_documents calls litellm.embedding correctly."""
-        mock_embedding.return_value = _mock_embedding_response(["hello", "world"])
+        mock_embedding.return_value = mock_embedding_response(["hello", "world"])
 
         embeddings = LiteLLMEmbeddings(
             model="openai/text-embedding-3-small",
@@ -93,7 +86,7 @@ class TestLiteLLMEmbeddingsParams:
     @patch("litellm.embedding")
     def test_embed_query(self, mock_embedding):
         """Test embed_query calls litellm.embedding with a single-item list."""
-        mock_embedding.return_value = _mock_embedding_response(["hello"])
+        mock_embedding.return_value = mock_embedding_response(["hello"])
 
         embeddings = LiteLLMEmbeddings(
             model="openai/text-embedding-3-small",
@@ -105,3 +98,85 @@ class TestLiteLLMEmbeddingsParams:
         call_kwargs = mock_embedding.call_args[1]
         assert call_kwargs["input"] == ["hello"]
         assert result == [0.1, 0.2, 0.3]
+
+    @patch("litellm.aembedding", new_callable=AsyncMock)
+    @pytest.mark.asyncio
+    async def test_aembed_documents(self, mock_aembedding):
+        """Test aembed_documents calls litellm.aembedding correctly."""
+        mock_aembedding.return_value = mock_embedding_response(["hello", "world"])
+
+        embeddings = LiteLLMEmbeddings(
+            model="openai/text-embedding-3-small",
+            api_key="fake-key",
+        )
+        result = await embeddings.aembed_documents(["hello", "world"])
+
+        mock_aembedding.assert_called_once()
+        call_kwargs = mock_aembedding.call_args[1]
+        assert call_kwargs["input"] == ["hello", "world"]
+        assert call_kwargs["model"] == "openai/text-embedding-3-small"
+        assert len(result) == 2
+        assert result[0] == [0.1, 0.2, 0.3]
+
+    @patch("litellm.aembedding", new_callable=AsyncMock)
+    @pytest.mark.asyncio
+    async def test_aembed_query(self, mock_aembedding):
+        """Test aembed_query calls litellm.aembedding with a single-item list."""
+        mock_aembedding.return_value = mock_embedding_response(["hello"])
+
+        embeddings = LiteLLMEmbeddings(
+            model="openai/text-embedding-3-small",
+            api_key="fake-key",
+        )
+        result = await embeddings.aembed_query("hello")
+
+        mock_aembedding.assert_called_once()
+        call_kwargs = mock_aembedding.call_args[1]
+        assert call_kwargs["input"] == ["hello"]
+        assert result == [0.1, 0.2, 0.3]
+
+    @patch("litellm.embedding")
+    def test_embed_documents_with_input_type(self, mock_embedding):
+        """Test that document_input_type is passed for embed_documents."""
+        mock_embedding.return_value = mock_embedding_response(["hello"])
+
+        embeddings = LiteLLMEmbeddings(
+            model="cohere/embed-english-v3.0",
+            api_key="fake-key",
+            document_input_type="search_document",
+            query_input_type="search_query",
+        )
+        embeddings.embed_documents(["hello"])
+
+        call_kwargs = mock_embedding.call_args[1]
+        assert call_kwargs["input_type"] == "search_document"
+
+    @patch("litellm.embedding")
+    def test_embed_query_with_input_type(self, mock_embedding):
+        """Test that query_input_type is passed for embed_query."""
+        mock_embedding.return_value = mock_embedding_response(["hello"])
+
+        embeddings = LiteLLMEmbeddings(
+            model="cohere/embed-english-v3.0",
+            api_key="fake-key",
+            document_input_type="search_document",
+            query_input_type="search_query",
+        )
+        embeddings.embed_query("hello")
+
+        call_kwargs = mock_embedding.call_args[1]
+        assert call_kwargs["input_type"] == "search_query"
+
+    @patch("litellm.embedding")
+    def test_no_input_type_when_unset(self, mock_embedding):
+        """Test that input_type is not passed when not configured."""
+        mock_embedding.return_value = mock_embedding_response(["hello"])
+
+        embeddings = LiteLLMEmbeddings(
+            model="openai/text-embedding-3-small",
+            api_key="fake-key",
+        )
+        embeddings.embed_documents(["hello"])
+
+        call_kwargs = mock_embedding.call_args[1]
+        assert "input_type" not in call_kwargs

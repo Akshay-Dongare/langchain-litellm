@@ -51,13 +51,16 @@ class LiteLLMEmbeddingsRouter(LiteLLMEmbeddings):
         super().__init__(router=router, **kwargs)
         self.router = router
 
-    def _get_router_params(self) -> Dict[str, Any]:
+    def _get_router_params(
+        self, *, input_type: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Build parameter dict for router.embedding(), excluding None values."""
         params: Dict[str, Any] = {
             "model": self.model,
             "timeout": self.request_timeout,
             "dimensions": self.dimensions,
             "encoding_format": self.encoding_format,
+            "input_type": input_type,
             **self.model_kwargs,
         }
         return {k: v for k, v in params.items() if v is not None}
@@ -71,7 +74,7 @@ class LiteLLMEmbeddingsRouter(LiteLLMEmbeddings):
         Returns:
             List of embeddings, one for each text.
         """
-        params = self._get_router_params()
+        params = self._get_router_params(input_type=self.document_input_type)
         response = self.router.embedding(input=texts, **params)
         return [item["embedding"] for item in response.data]
 
@@ -84,7 +87,9 @@ class LiteLLMEmbeddingsRouter(LiteLLMEmbeddings):
         Returns:
             Embedding for the text.
         """
-        return self.embed_documents([text])[0]
+        params = self._get_router_params(input_type=self.query_input_type)
+        response = self.router.embedding(input=[text], **params)
+        return response.data[0]["embedding"]
 
     async def aembed_documents(self, texts: List[str]) -> List[List[float]]:
         """Async embed a list of document texts via the router.
@@ -95,7 +100,7 @@ class LiteLLMEmbeddingsRouter(LiteLLMEmbeddings):
         Returns:
             List of embeddings, one for each text.
         """
-        params = self._get_router_params()
+        params = self._get_router_params(input_type=self.document_input_type)
         response = await self.router.aembedding(input=texts, **params)
         return [item["embedding"] for item in response.data]
 
@@ -108,4 +113,6 @@ class LiteLLMEmbeddingsRouter(LiteLLMEmbeddings):
         Returns:
             Embedding for the text.
         """
-        return (await self.aembed_documents([text]))[0]
+        params = self._get_router_params(input_type=self.query_input_type)
+        response = await self.router.aembedding(input=[text], **params)
+        return response.data[0]["embedding"]

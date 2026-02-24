@@ -5,7 +5,7 @@ from typing import Type
 from langchain_tests.integration_tests import EmbeddingsIntegrationTests
 
 from langchain_litellm.embeddings import LiteLLMEmbeddingsRouter
-from tests.utils import test_router
+from tests.utils import test_embedding_router
 
 
 class TestLiteLLMEmbeddingsRouterIntegration(EmbeddingsIntegrationTests):
@@ -16,5 +16,5 @@ class TestLiteLLMEmbeddingsRouterIntegration(EmbeddingsIntegrationTests):
     @property
     def embedding_model_params(self) -> dict:
         return {
-            "router": test_router(),
+            "router": test_embedding_router(),
         }

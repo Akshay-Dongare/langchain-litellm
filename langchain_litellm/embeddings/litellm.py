@@ -28,6 +28,19 @@ class LiteLLMEmbeddings(BaseModel, Embeddings):
                 api_key="sk-...",
             )
             vectors = embeddings.embed_documents(["hello", "world"])
+
+    For providers that distinguish document vs query embeddings (Cohere,
+    Voyage, Vertex AI, etc.), set ``document_input_type`` and
+    ``query_input_type``:
+
+        .. code-block:: python
+
+            embeddings = LiteLLMEmbeddings(
+                model="cohere/embed-english-v3.0",
+                api_key="...",
+                document_input_type="search_document",
+                query_input_type="search_query",
+            )
     """
 
     model: str = "openai/text-embedding-3-small"
@@ -67,7 +80,19 @@ class LiteLLMEmbeddings(BaseModel, Embeddings):
     encoding_format: Optional[str] = None
     """Encoding format for the embeddings (e.g. 'float', 'base64')."""
 
-    def _get_litellm_params(self) -> Dict[str, Any]:
+    document_input_type: Optional[str] = None
+    """Input type to send when embedding documents (e.g. 'search_document'
+    for Cohere, 'RETRIEVAL_DOCUMENT' for Vertex AI). When set,
+    ``embed_documents`` passes this as ``input_type``."""
+
+    query_input_type: Optional[str] = None
+    """Input type to send when embedding queries (e.g. 'search_query'
+    for Cohere, 'RETRIEVAL_QUERY' for Vertex AI). When set,
+    ``embed_query`` passes this as ``input_type``."""
+
+    def _get_litellm_params(
+        self, *, input_type: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Build parameter dict for litellm.embedding(), excluding None values."""
         params: Dict[str, Any] = {
             "model": self.model,
@@ -81,6 +106,7 @@ class LiteLLMEmbeddings(BaseModel, Embeddings):
             "extra_headers": self.extra_headers,
             "dimensions": self.dimensions,
             "encoding_format": self.encoding_format,
+            "input_type": input_type,
             **self.model_kwargs,
         }
         return {k: v for k, v in params.items() if v is not None}
@@ -96,7 +122,7 @@ class LiteLLMEmbeddings(BaseModel, Embeddings):
         """
         import litellm
 
-        params = self._get_litellm_params()
+        params = self._get_litellm_params(input_type=self.document_input_type)
         response = litellm.embedding(input=texts, **params)
         return [item["embedding"] for item in response.data]
 
@@ -109,7 +135,11 @@ class LiteLLMEmbeddings(BaseModel, Embeddings):
         Returns:
             Embedding for the text.
         """
-        return self.embed_documents([text])[0]
+        import litellm
+
+        params = self._get_litellm_params(input_type=self.query_input_type)
+        response = litellm.embedding(input=[text], **params)
+        return response.data[0]["embedding"]
 
     async def aembed_documents(self, texts: List[str]) -> List[List[float]]:
         """Async embed a list of document texts.
@@ -122,7 +152,7 @@ class LiteLLMEmbeddings(BaseModel, Embeddings):
         """
         import litellm
 
-        params = self._get_litellm_params()
+        params = self._get_litellm_params(input_type=self.document_input_type)
         response = await litellm.aembedding(input=texts, **params)
         return [item["embedding"] for item in response.data]
 
@@ -135,4 +165,8 @@ class LiteLLMEmbeddings(BaseModel, Embeddings):
         Returns:
             Embedding for the text.
         """
-        return (await self.aembed_documents([text]))[0]
+        import litellm
+
+        params = self._get_litellm_params(input_type=self.query_input_type)
+        response = await litellm.aembedding(input=[text], **params)
+        return response.data[0]["embedding"]
