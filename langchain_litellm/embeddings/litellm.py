@@ -6,7 +6,7 @@ import logging
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
 from langchain_core.embeddings import Embeddings
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +119,6 @@ class LiteLLMEmbeddings(BaseModel, Embeddings):
             "custom_llm_provider": self.custom_llm_provider,
             "organization": self.organization,
             "timeout": self.request_timeout,
-            "max_retries": self.max_retries,
             "extra_headers": self.extra_headers,
             "dimensions": self.dimensions,
             "encoding_format": self.encoding_format,
