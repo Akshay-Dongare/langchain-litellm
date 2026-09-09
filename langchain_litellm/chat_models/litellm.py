@@ -122,8 +122,16 @@ _THINKING_BLOCK_INDEX = "lc_thinking"
 
 def _inject_reasoning_content_into_content(
     content: Any, reasoning_content: str, index: Optional[str] = None
-) -> List[Dict[str, Any]]:
-    thinking_block = {"type": "thinking", "thinking": reasoning_content}
+) -> List[Union[str, Dict[Any, Any]]]:
+    """Prepend a thinking block to ``content``, returning it as a block list.
+
+    Mirrors langchain-core's message content element type: existing content is
+    passed through as-is, so the returned list holds strings as well as blocks.
+    """
+    thinking_block: Dict[Any, Any] = {
+        "type": "thinking",
+        "thinking": reasoning_content,
+    }
     if index is not None:
         thinking_block["index"] = index
     if isinstance(content, list):
