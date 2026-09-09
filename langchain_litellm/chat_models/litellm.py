@@ -111,10 +111,29 @@ def _create_retry_decorator(
     )
 
 
+# Index assigned to thinking blocks injected into streamed chunks. Without an
+# index, langchain-core's merge_lists appends each delta's block instead of
+# merging, so the aggregated AIMessage ends up with one thinking block per
+# streamed token. The "lc_" string-index convention is reserved by
+# langchain-core for library-injected blocks and cannot collide with
+# provider-assigned integer indexes.
+_THINKING_BLOCK_INDEX = "lc_thinking"
+
+
 def _inject_reasoning_content_into_content(
-    content: Any, reasoning_content: str
-) -> List[Dict[str, Any]]:
-    thinking_block = {"type": "thinking", "thinking": reasoning_content}
+    content: Any, reasoning_content: str, index: Optional[str] = None
+) -> List[Union[str, Dict[Any, Any]]]:
+    """Prepend a thinking block to ``content``, returning it as a block list.
+
+    Mirrors langchain-core's message content element type: existing content is
+    passed through as-is, so the returned list holds strings as well as blocks.
+    """
+    thinking_block: Dict[Any, Any] = {
+        "type": "thinking",
+        "thinking": reasoning_content,
+    }
+    if index is not None:
+        thinking_block["index"] = index
     if isinstance(content, list):
         has_thinking_block = any(
             isinstance(block, dict)
@@ -261,7 +280,9 @@ def _convert_delta_to_message_chunk(
         additional_kwargs["reasoning_content"] = reasoning_content
 
     if reasoning_content and (role == "assistant" or default_class == AIMessageChunk):
-        content = _inject_reasoning_content_into_content(content, reasoning_content)
+        content = _inject_reasoning_content_into_content(
+            content, reasoning_content, index=_THINKING_BLOCK_INDEX
+        )
 
     if provider_specific_fields is not None:
         additional_kwargs["provider_specific_fields"] = provider_specific_fields

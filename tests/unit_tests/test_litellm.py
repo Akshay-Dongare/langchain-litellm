@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from langchain_litellm._version import __version__
 from langchain_litellm.chat_models import ChatLiteLLM
 from langchain_litellm.chat_models.litellm import (
+    _THINKING_BLOCK_INDEX,
     _convert_delta_to_message_chunk,
     _convert_dict_to_message,
     _convert_message_to_dict,
@@ -275,6 +276,57 @@ def test_inject_reasoning_content_does_not_duplicate_existing_thinking() -> None
     result = _inject_reasoning_content_into_content(content, "hidden chain")
 
     assert result == content
+
+
+def test_streamed_reasoning_deltas_merge_into_single_thinking_block() -> None:
+    """Aggregating streamed chunks must yield ONE thinking block, not one per delta.
+
+    Thinking blocks injected into streamed chunks carry an ``index`` so
+    langchain-core's ``merge_lists`` merges them across chunks; without it,
+    every reasoning delta survives as a separate content block in the final
+    AIMessage (one block per token).
+    """
+    deltas = [
+        {"role": "assistant", "content": "", "reasoning_content": "step "},
+        {"role": "assistant", "content": "", "reasoning_content": "by step"},
+        {"role": "assistant", "content": "the "},
+        {"role": "assistant", "content": "answer"},
+    ]
+    chunks = [_convert_delta_to_message_chunk(d, AIMessageChunk) for d in deltas]
+
+    merged = chunks[0]
+    for chunk in chunks[1:]:
+        merged = merged + chunk
+
+    thinking_blocks = [
+        block
+        for block in merged.content
+        if isinstance(block, dict) and block.get("type") == "thinking"
+    ]
+    assert len(thinking_blocks) == 1
+    assert thinking_blocks[0]["thinking"] == "step by step"
+    assert merged.additional_kwargs["reasoning_content"] == "step by step"
+
+    # The index is what drives the merge, so pin it rather than only observing
+    # that one block came out.
+    assert thinking_blocks[0]["index"] == _THINKING_BLOCK_INDEX
+    # "lc_" is langchain-core's reserved prefix for library-injected blocks, so
+    # a provider-assigned integer index can never collide with it.
+    assert _THINKING_BLOCK_INDEX.startswith("lc_")
+
+
+def test_non_streamed_reasoning_block_carries_no_index() -> None:
+    """Only streamed chunks need an index; a whole response is already one block."""
+    message = _convert_dict_to_message(
+        {"role": "assistant", "content": "hi", "reasoning_content": "step by step"}
+    )
+    thinking_blocks = [
+        block
+        for block in message.content
+        if isinstance(block, dict) and block.get("type") == "thinking"
+    ]
+    assert len(thinking_blocks) == 1
+    assert "index" not in thinking_blocks[0]
 
 
 # ── credential forwarding ─────────────────────────────────────────────────────
